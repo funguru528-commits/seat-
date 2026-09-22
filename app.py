@@ -6,6 +6,7 @@ import random
 import string
 import time
 import threading
+import resend
 from PIL import Image, ImageDraw
 import io
 
