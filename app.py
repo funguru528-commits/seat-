@@ -6,7 +6,9 @@ import random
 import string
 import time
 import threading
-import resend
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from PIL import Image, ImageDraw
 import io
 
@@ -16,7 +18,7 @@ import io
 if 'current_page' not in st.session_state:
     st.session_state.current_page = 'Home'
 if 'admin_auth_step' not in st.session_state:
-    st.session_state.admin_auth_step = 0 # 0: Password & Email, 1: OTP Verification, 2: Access Granted
+    st.session_state.admin_auth_step = 0 # 0: Credentials, 1: OTP, 2: Access Granted
 if 'generated_otp' not in st.session_state:
     st.session_state.generated_otp = None
 if 'admin_email' not in st.session_state:
@@ -32,10 +34,6 @@ st.set_page_config(
 )
 
 def inject_custom_styles():
-    """
-    Injects styles based on the active page.
-    CSS strings are flush-left to prevent Streamlit from rendering them as code blocks.
-    """
     if st.session_state.current_page in ['Home', 'Student']:
         css = """
 <style>
@@ -73,7 +71,6 @@ html, body, [class*="css"], .stMarkdown, .stText, input, button, select, textare
     font-weight: bold !important;
     font-size: 1.1rem !important;
 }
-/* Moving Campus Banner Styling */
 .campus-marquee {
     width: 100%;
     overflow: hidden;
@@ -203,28 +200,31 @@ def get_all_allotments():
 init_db()
 
 # ==========================================
-# 4. INSTANT RESEND API TRANSACTIONAL OTP
+# 4. GMAIL SMTP DISPATCH (BUILT-IN)
 # ==========================================
-# Replace 're_your_api_key_here' with your API key from https://resend.com
-resend.api_key = "re_your_api_key_here"
+SENDER_EMAIL = "your_email@gmail.com"        # Replace with your Gmail
+SENDER_APP_PASSWORD = "your_app_password"    # Replace with 16-character App Password
 
 def send_email_otp(target_email, otp):
-    """
-    Sends transactional OTP using Resend API for instant delivery (< 3 seconds).
-    """
+    """Sends OTP using standard smtplib on Port 587 (TLS)."""
     try:
-        resend.Emails.send({
-            "from": "SVCE Admin <onboarding@resend.dev>",
-            "to": target_email,
-            "subject": "SVCE Portal - Admin Login Verification",
-            "html": f"<p>Security Alert: Your SVCE Admin login OTP is <strong>{otp}</strong>. Do not share this with anyone.</p>"
-        })
+        msg = MIMEMultipart()
+        msg['From'] = SENDER_EMAIL
+        msg['To'] = target_email
+        msg['Subject'] = "SVCE Portal - Admin Login Verification"
+        
+        body = f"Security Alert: Your SVCE Admin login OTP is {otp}. Do not share this with anyone."
+        msg.attach(MIMEText(body, 'plain'))
+        
+        with smtplib.SMTP('smtp.gmail.com', 587) as server:
+            server.starttls()
+            server.login(SENDER_EMAIL, SENDER_APP_PASSWORD)
+            server.send_message(msg)
         return True, "Email Sent Successfully"
     except Exception as e:
         return False, str(e)
 
 def send_email_otp_async(target_email, otp):
-    """Executes email dispatch in a background thread to keep Streamlit instant."""
     thread = threading.Thread(target=send_email_otp, args=(target_email, otp))
     thread.daemon = True
     thread.start()
@@ -233,10 +233,6 @@ def send_email_otp_async(target_email, otp):
 # 5. MULTI-TIER 3D BLUEPRINT ENGINE (THREE.JS)
 # ==========================================
 def render_3d_college_blueprint(target_room, target_floor, bench_no):
-    """
-    Synthesizes Ground, 1st, and 2nd Floor blueprints with 4 Red Staircase connectors
-    into a fully rotatable, explodable 3D WebGL architecture model.
-    """
     room_clean = str(target_room).upper().strip().replace(" ", "")
     
     html_code = f"""
@@ -364,7 +360,6 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
             controls.maxPolarAngle = Math.PI / 2 - 0.02;
             controls.target.set(0, 15, 0);
 
-            // Lighting
             scene.add(new THREE.AmbientLight(0xffffff, 0.85));
             const sun = new THREE.DirectionalLight(0xffffff, 0.9);
             sun.position.set(50, 80, 40);
@@ -375,7 +370,6 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
             gridHelper.position.y = -0.5;
             scene.add(gridHelper);
 
-            // Text Sprite Helper
             function makeTextSprite(message, color = "#ffffff", bgColor = "rgba(15, 23, 42, 0.85)", isSpecial = false) {{
                 const canvas = document.createElement('canvas');
                 canvas.width = 256;
@@ -402,7 +396,6 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
             let targetPinMesh = null;
             const floorGroups = [];
 
-            // Helper to build room blocks
             function createRoom(name, x, y, z, w, h, d, floorIdx) {{
                 const group = new THREE.Group();
                 const geo = new THREE.BoxGeometry(w, h, d);
@@ -459,7 +452,6 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
                 return group;
             }}
 
-            // Helper to build floor slab
             function createFloorSlab(floorName) {{
                 const slabGroup = new THREE.Group();
                 const rear = new THREE.Mesh(new THREE.BoxGeometry(76, 0.6, 26), new THREE.MeshStandardMaterial({{ color: 0x0f172a, roughness: 0.7 }}));
@@ -801,7 +793,6 @@ elif st.session_state.current_page == 'Admin':
                 st.session_state.generated_otp = generated_otp
                 st.session_state.admin_email = email_input
                 
-                # Asynchronously trigger instant email dispatch via Resend API
                 send_email_otp_async(email_input, generated_otp)
                 
                 st.session_state.admin_auth_step = 1
