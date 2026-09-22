@@ -5,9 +5,8 @@ import sqlite3
 import random
 import string
 import time
-import smtplib
 import threading
-from email.mime.text import MIMEText
+import resend
 from PIL import Image, ImageDraw
 import io
 
@@ -204,32 +203,28 @@ def get_all_allotments():
 init_db()
 
 # ==========================================
-# 4. ASYNCHRONOUS GMAIL OTP INTEGRATION
+# 4. INSTANT RESEND API TRANSACTIONAL OTP
 # ==========================================
+# Replace 're_your_api_key_here' with your API key from https://resend.com
+resend.api_key = "re_your_api_key_here"
+
 def send_email_otp(target_email, otp):
     """
-    Sends an email OTP using Gmail's SMTP server via funguru528@gmail.com
-    Executed in a non-blocking background thread.
+    Sends transactional OTP using Resend API for instant delivery (< 3 seconds).
     """
-    SENDER_EMAIL = "funguru528@gmail.com"
-    SENDER_APP_PASSWORD = "yigscoygwoqdbmsd"
-
     try:
-        msg = MIMEText(f"Security Alert: Your SVCE Admin login OTP is {otp}. Do not share this with anyone.")
-        msg['Subject'] = 'SVCE Portal - Admin Login Verification'
-        msg['From'] = SENDER_EMAIL
-        msg['To'] = target_email
-
-        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
-            server.login(SENDER_EMAIL, SENDER_APP_PASSWORD)
-            server.send_message(msg)
-            
+        resend.Emails.send({
+            "from": "SVCE Admin <onboarding@resend.dev>",
+            "to": target_email,
+            "subject": "SVCE Portal - Admin Login Verification",
+            "html": f"<p>Security Alert: Your SVCE Admin login OTP is <strong>{otp}</strong>. Do not share this with anyone.</p>"
+        })
         return True, "Email Sent Successfully"
     except Exception as e:
         return False, str(e)
 
 def send_email_otp_async(target_email, otp):
-    """Executes email dispatch in a background thread to prevent Streamlit UI lag."""
+    """Executes email dispatch in a background thread to keep Streamlit instant."""
     thread = threading.Thread(target=send_email_otp, args=(target_email, otp))
     thread.daemon = True
     thread.start()
@@ -806,7 +801,7 @@ elif st.session_state.current_page == 'Admin':
                 st.session_state.generated_otp = generated_otp
                 st.session_state.admin_email = email_input
                 
-                # Asynchronously trigger email send in background to eliminate UI wait time
+                # Asynchronously trigger instant email dispatch via Resend API
                 send_email_otp_async(email_input, generated_otp)
                 
                 st.session_state.admin_auth_step = 1
@@ -815,7 +810,7 @@ elif st.session_state.current_page == 'Admin':
     # Step 1: OTP Verification
     elif st.session_state.admin_auth_step == 1:
         st.subheader("🔑 Enter Email OTP")
-        st.info(f"An OTP has been dispatched to: **{st.session_state.admin_email}** (It may take a few moments to arrive in your inbox)")
+        st.info(f"An OTP has been dispatched to: **{st.session_state.admin_email}**")
 
         with st.form("otp_form"):
             otp_input = st.text_input("6-Digit Security OTP:")
