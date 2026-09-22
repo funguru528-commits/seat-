@@ -6,6 +6,7 @@ import random
 import string
 import time
 import smtplib
+import threading
 from email.mime.text import MIMEText
 from PIL import Image, ImageDraw
 import io
@@ -203,11 +204,12 @@ def get_all_allotments():
 init_db()
 
 # ==========================================
-# 4. GMAIL OTP INTEGRATION
+# 4. ASYNCHRONOUS GMAIL OTP INTEGRATION
 # ==========================================
 def send_email_otp(target_email, otp):
     """
     Sends an email OTP using Gmail's SMTP server via funguru528@gmail.com
+    Executed in a non-blocking background thread.
     """
     SENDER_EMAIL = "funguru528@gmail.com"
     SENDER_APP_PASSWORD = "yigscoygwoqdbmsd"
@@ -225,6 +227,12 @@ def send_email_otp(target_email, otp):
         return True, "Email Sent Successfully"
     except Exception as e:
         return False, str(e)
+
+def send_email_otp_async(target_email, otp):
+    """Executes email dispatch in a background thread to prevent Streamlit UI lag."""
+    thread = threading.Thread(target=send_email_otp, args=(target_email, otp))
+    thread.daemon = True
+    thread.start()
 
 # ==========================================
 # 5. MULTI-TIER 3D BLUEPRINT ENGINE (THREE.JS)
@@ -798,19 +806,16 @@ elif st.session_state.current_page == 'Admin':
                 st.session_state.generated_otp = generated_otp
                 st.session_state.admin_email = email_input
                 
-                with st.spinner("Sending OTP..."):
-                    success, msg = send_email_otp(email_input, generated_otp)
+                # Asynchronously trigger email send in background to eliminate UI wait time
+                send_email_otp_async(email_input, generated_otp)
                 
-                if success:
-                    st.session_state.admin_auth_step = 1
-                    st.rerun()
-                else:
-                    st.error(f"Failed to send email OTP: {msg}")
+                st.session_state.admin_auth_step = 1
+                st.rerun()
 
     # Step 1: OTP Verification
     elif st.session_state.admin_auth_step == 1:
         st.subheader("🔑 Enter Email OTP")
-        st.info(f"An OTP has been dispatched to: **{st.session_state.admin_email}**")
+        st.info(f"An OTP has been dispatched to: **{st.session_state.admin_email}** (It may take a few moments to arrive in your inbox)")
 
         with st.form("otp_form"):
             otp_input = st.text_input("6-Digit Security OTP:")
