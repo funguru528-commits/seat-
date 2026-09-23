@@ -6,10 +6,12 @@ import random
 import string
 import time
 import smtplib
-import requests
 from email.mime.text import MIMEText
+from email.utils import formatdate, make_msgid
 from PIL import Image, ImageDraw
 import io
+import base64
+import os
 
 # ==========================================
 # 1. SESSION STATE INITIALIZATION
@@ -22,6 +24,8 @@ if 'generated_otp' not in st.session_state:
     st.session_state.generated_otp = None
 if 'admin_email' not in st.session_state:
     st.session_state.admin_email = None
+
+AUTHORIZED_ADMIN_EMAIL = "funguru528@gmail.com"
 
 # ==========================================
 # 2. PAGE CONFIGURATION & DYNAMIC STYLING
@@ -186,76 +190,67 @@ def fetch_student_allotment(usn):
 init_db()
 
 # ==========================================
-# 4. ROBUST OTP DISPATCHER (HTTP API + MULTI-PORT FALLBACK)
+# 4. GMAIL OTP INTEGRATION (DIAGNOSTIC TRANSPORT)
 # ==========================================
 def send_email_otp(target_email, otp):
     """
-    Sends OTP via HTTP API (Resend / Brevo) if configured, or attempts SMTP
-    with port fallbacks (587 -> 465) to handle cloud network blocks.
+    Connects to Gmail's SMTP server on port 587 with STARTTLS.
+    Appends mandatory RFC email headers and catches discrete socket issues.
     """
-    # 1. OPTION A: Free HTTPS REST API via Resend (Bypasses Render SMTP port blocking)
-    # Set RESEND_API_KEY in Render Environment Variables or st.secrets
-    resend_api_key = None
-    if hasattr(st, "secrets") and "RESEND_API_KEY" in st.secrets:
-        resend_api_key = st.secrets["RESEND_API_KEY"]
+    SENDER_EMAIL = AUTHORIZED_ADMIN_EMAIL
+    SENDER_APP_PASSWORD = "spfysddlctqrwhuq"
 
-    if resend_api_key:
-        try:
-            resp = requests.post(
-                "https://api.resend.com/emails",
-                headers={
-                    "Authorization": f"Bearer {resend_api_key}",
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "from": "SVCE Portal <onboarding@resend.dev>",
-                    "to": [target_email],
-                    "subject": "SVCE Portal - Admin Login Verification",
-                    "text": f"Security Alert: Your SVCE Admin login OTP is {otp}. Do not share this with anyone."
-                },
-                timeout=10
-            )
-            if resp.status_code in [200, 201]:
-                return True, "Email Sent Successfully via HTTP API"
-        except Exception:
-            pass # Fall through to direct SMTP attempts
-
-    # 2. OPTION B: SMTP Fallbacks
-    SENDER_EMAIL = "funguru528@gmail.com"
-    SENDER_APP_PASSWORD = "yigscoygwoqdbmsd"
-
-    msg = MIMEText(f"Security Alert: Your SVCE Admin login OTP is {otp}. Do not share this with anyone.")
-    msg['Subject'] = 'SVCE Portal - Admin Login Verification'
-    msg['From'] = SENDER_EMAIL
-    msg['To'] = target_email
-
-    # Attempt 1: Port 587 with STARTTLS
     try:
+        msg = MIMEText(f"Security Alert: Your SVCE Admin login OTP is {otp}. Do not share this with anyone.")
+        msg['Subject'] = f'SVCE Portal - Admin Verification Code [{otp}]'
+        msg['From'] = SENDER_EMAIL
+        msg['To'] = target_email
+        msg['Date'] = formatdate(localtime=True)
+        msg['Message-ID'] = make_msgid()
+        msg['X-Priority'] = '1'
+        msg['X-MSMail-Priority'] = 'High'
+        msg['Importance'] = 'High'
+
+        # Establish connection with a 10s socket timeout
         with smtplib.SMTP('smtp.gmail.com', 587, timeout=10) as server:
             server.ehlo()
             server.starttls()
             server.ehlo()
             server.login(SENDER_EMAIL, SENDER_APP_PASSWORD)
             server.send_message(msg)
-            return True, "Email Sent Successfully (Port 587)"
-    except Exception as e587:
-        # Attempt 2: Port 465 with SSL
-        try:
-            with smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=10) as server:
-                server.login(SENDER_EMAIL, SENDER_APP_PASSWORD)
-                server.send_message(msg)
-                return True, "Email Sent Successfully (Port 465)"
-        except Exception as e465:
-            # If both fail due to Render's firewall, explain clearly:
-            if "101" in str(e587) or "101" in str(e465) or "unreachable" in str(e587).lower():
-                return False, "Render blocked raw SMTP outbound ports (Errno 101). Use HTTP API (e.g. Resend) or use the simulation OTP shown below."
-            return False, f"SMTP Error: {str(e587)}"
+            
+        return True, "Email Sent Successfully"
+
+    except smtplib.SMTPAuthenticationError as e:
+        return False, f"AUTH_ERROR (535): Google rejected credentials. Verify App Password."
+    except (smtplib.SMTPConnectError, TimeoutError, OSError) as e:
+        return False, f"CONNECTION_BLOCKED: Host blocked outbound SMTP port 587 ({type(e).__name__})."
+    except Exception as e:
+        return False, f"ERROR: {type(e).__name__} - {str(e)}"
 
 # ==========================================
-# 5. MULTI-TIER 3D BLUEPRINT ENGINE (THREE.JS)
+# 5. REALISTIC 3D COLLEGE BLUEPRINT ENGINE
 # ==========================================
+def get_image_as_base64(candidates, fallback_url):
+    for filename in candidates:
+        if os.path.exists(filename):
+            with open(filename, "rb") as img_file:
+                b64_str = base64.b64encode(img_file.read()).decode()
+                ext = "png" if filename.lower().endswith(".png") else "jpeg"
+                return f"data:image/{ext};base64,{b64_str}"
+    return fallback_url
+
 def render_3d_college_blueprint(target_room, target_floor, bench_no):
     room_clean = str(target_room).upper().strip().replace(" ", "")
+    floor_clean = str(target_floor).upper().strip()
+    
+    # Aerial satellite image
+    aerial_candidates = ["campus_aerial.jpg", "campus_aerial.png", "campus_aerial.jpeg", "WhatsApp Image 2026-09-19 at 1.36.35 PM.jpeg", "WhatsApp Image 2026-09-19 at 1.36.35 PM_2.jpeg"]
+    aerial_data_uri = get_image_as_base64(aerial_candidates, "https://svcengg.edu.in/assets/bgimages/IMG_9641.webp")
+    
+    # Central block facade image
+    cb_candidates = ["cb_front.jpg", "cb_front.png", "cb_front.jpeg", "cb image of the college.jpg"]
+    cb_data_uri = get_image_as_base64(cb_candidates, "https://svcengg.edu.in/assets/bgimages/IMG_9641.webp")
     
     html_code = f"""
     <!DOCTYPE html>
@@ -264,12 +259,12 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
         <meta charset="utf-8">
         <style>
             body {{ margin: 0; padding: 0; overflow: hidden; background: #070d1f; font-family: 'Times New Roman', serif; }}
-            #canvas-container {{ width: 100%; height: 550px; position: relative; }}
+            #canvas-container {{ width: 100%; height: 580px; position: relative; }}
             .overlay-ui {{
                 position: absolute;
                 top: 12px;
                 left: 12px;
-                background: rgba(15, 23, 42, 0.9);
+                background: rgba(15, 23, 42, 0.92);
                 backdrop-filter: blur(8px);
                 border: 1px solid #38bdf8;
                 border-radius: 8px;
@@ -288,10 +283,10 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
                 border-radius: 4px;
                 font-weight: bold;
             }}
-            .badge-stair {{
+            .badge-path {{
                 display: inline-block;
-                background: #ef4444;
-                color: #fff;
+                background: #22c55e;
+                color: #000;
                 padding: 2px 6px;
                 border-radius: 4px;
                 font-weight: bold;
@@ -315,9 +310,7 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
                 font-weight: bold;
                 transition: all 0.2s;
             }}
-            .view-btn:hover {{
-                background: #0284c7;
-            }}
+            .view-btn:hover {{ background: #0284c7; }}
             .controls-hint {{
                 position: absolute;
                 bottom: 12px;
@@ -325,7 +318,7 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
                 right: 12px;
                 display: flex;
                 justify-content: space-between;
-                background: rgba(0,0,0,0.65);
+                background: rgba(0,0,0,0.78);
                 border-radius: 6px;
                 padding: 6px 12px;
                 color: #94a3b8;
@@ -339,36 +332,34 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
     <body>
         <div id="canvas-container">
             <div class="overlay-ui">
-                <h4>🏛️ SVCE Campus Multi-Floor 3D Model</h4>
-                <p>Target Class: <span class="badge-assigned">{target_room} ({target_floor}, Bench #{bench_no})</span></p>
-                <p style="margin-top:4px;">Stairs: <span class="badge-stair">4 Red Vertical Connectors</span> linking Ground ⇄ 1st ⇄ 2nd</p>
+                <h4>🏛️ Realistic SVCE Campus Model & Active Wayfinder</h4>
+                <p>Destination: <span class="badge-assigned">{target_room} ({target_floor}, Bench #{bench_no})</span></p>
+                <p style="margin-top:4px;">Main Entrance: <span class="badge-path">🔴 East Wing Gate (Red Marked)</span></p>
             </div>
             
             <div class="view-toolbar">
+                <button class="view-btn" onclick="focusDestination()">🎯 Focus Room</button>
                 <button class="view-btn" onclick="setExploded(false)">🏢 Stacked View</button>
                 <button class="view-btn" onclick="setExploded(true)">📂 Explode Floors</button>
-                <button class="view-btn" onclick="isolateFloor(0)">Gnd Floor</button>
-                <button class="view-btn" onclick="isolateFloor(1)">1st Floor</button>
-                <button class="view-btn" onclick="isolateFloor(2)">2nd Floor</button>
-                <button class="view-btn" onclick="resetView()">🔄 Reset 360°</button>
+                <button class="view-btn" onclick="resetView()">🔄 360° Overview</button>
             </div>
 
             <div class="controls-hint">
-                <span>🖱️ <b>Left Click + Drag:</b> Rotate 360° | <b>Scroll:</b> Zoom | <b>Right Click:</b> Pan</span>
-                <span>🔴 <b>Red Towers:</b> Staircases Linking Adjacent Floors</span>
+                <span>🖱️ <b>Rotate:</b> Left-Click Drag | <b>Zoom:</b> Scroll | <b>Pan:</b> Right-Click</span>
+                <span>🏫 <b>Central Block:</b> Textured with SVCE Front Facade Photo</span>
             </div>
         </div>
 
         <script>
             const container = document.getElementById('canvas-container');
             const width = container.clientWidth || 900;
-            const height = 550;
+            const height = 580;
 
             const scene = new THREE.Scene();
             scene.background = new THREE.Color(0x070d1f);
 
             const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
-            camera.position.set(65, 55, 75);
+            camera.position.set(-58, 62, 78);
 
             const renderer = new THREE.WebGLRenderer({{ antialias: true }});
             renderer.setSize(width, height);
@@ -380,18 +371,92 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
             controls.enableDamping = true;
             controls.dampingFactor = 0.05;
             controls.maxPolarAngle = Math.PI / 2 - 0.02;
-            controls.target.set(0, 15, 0);
+            controls.target.set(0, 10, 0);
 
-            // Lighting
-            scene.add(new THREE.AmbientLight(0xffffff, 0.85));
-            const sun = new THREE.DirectionalLight(0xffffff, 0.9);
-            sun.position.set(50, 80, 40);
+            scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+            const sun = new THREE.DirectionalLight(0xffffff, 1.1);
+            sun.position.set(45, 90, 50);
             sun.castShadow = true;
             scene.add(sun);
 
-            const gridHelper = new THREE.GridHelper(120, 30, 0x1e3a5f, 0x0f172a);
-            gridHelper.position.y = -0.5;
-            scene.add(gridHelper);
+            const textureLoader = new THREE.TextureLoader();
+
+            // 1. Campus Aerial Texture Map Base
+            const aerialImageURI = "{aerial_data_uri}";
+            textureLoader.load(aerialImageURI, function(texture) {{
+                texture.wrapS = THREE.ClampToEdgeWrapping;
+                texture.wrapT = THREE.ClampToEdgeWrapping;
+
+                const planeGeo = new THREE.PlaneGeometry(105, 78);
+                const planeMat = new THREE.MeshStandardMaterial({{
+                    map: texture,
+                    roughness: 0.7,
+                    metalness: 0.1
+                }});
+                const groundPhoto = new THREE.Mesh(planeGeo, planeMat);
+                groundPhoto.rotation.x = -Math.PI / 2;
+                groundPhoto.position.set(0, -0.1, 8);
+                groundPhoto.receiveShadow = true;
+                scene.add(groundPhoto);
+            }});
+
+            // 2. Central Block (CB) Front Facade Texture
+            const cbImageURI = "{cb_data_uri}";
+            let cbFacadeMesh = null;
+            textureLoader.load(cbImageURI, function(cbTex) {{
+                cbTex.wrapS = THREE.ClampToEdgeWrapping;
+                cbTex.wrapT = THREE.ClampToEdgeWrapping;
+
+                const cbGeo = new THREE.PlaneGeometry(26, 26);
+                const cbMat = new THREE.MeshStandardMaterial({{
+                    map: cbTex,
+                    roughness: 0.4,
+                    metalness: 0.1,
+                    side: THREE.DoubleSide
+                }});
+                cbFacadeMesh = new THREE.Mesh(cbGeo, cbMat);
+                cbFacadeMesh.position.set(0, 13.5, -6.8);
+                scene.add(cbFacadeMesh);
+            }});
+
+            function createClassroomFacadeTexture(roomName, isAssigned) {{
+                const canvas = document.createElement('canvas');
+                canvas.width = 512;
+                canvas.height = 256;
+                const ctx = canvas.getContext('2d');
+
+                ctx.fillStyle = isAssigned ? "#0369a1" : "#e2e8f0";
+                ctx.fillRect(0, 0, 512, 256);
+
+                ctx.fillStyle = isAssigned ? "#0284c7" : "#94a3b8";
+                ctx.fillRect(0, 220, 512, 36);
+
+                const windowCols = 4;
+                const winWidth = 96;
+                const winHeight = 100;
+                const startY = 60;
+
+                for (let i = 0; i < windowCols; i++) {{
+                    const startX = 25 + i * 122;
+                    ctx.fillStyle = "#1e293b";
+                    ctx.fillRect(startX, startY, winWidth, winHeight);
+                    ctx.fillStyle = isAssigned ? "#38bdf8" : "#93c5fd";
+                    ctx.fillRect(startX + 4, startY + 4, winWidth - 8, winHeight - 8);
+                    ctx.fillStyle = "#334155";
+                    ctx.fillRect(startX + winWidth / 2 - 2, startY + 4, 4, winHeight - 8);
+                    ctx.fillRect(startX + 4, startY + winHeight / 2 - 2, winWidth - 8, 4);
+                }}
+
+                ctx.fillStyle = isAssigned ? "#facc15" : "#0f172a";
+                ctx.fillRect(156, 12, 200, 36);
+                ctx.fillStyle = isAssigned ? "#000000" : "#ffffff";
+                ctx.font = 'bold 20px "Times New Roman", serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(roomName, 256, 30);
+
+                return new THREE.CanvasTexture(canvas);
+            }}
 
             function makeTextSprite(message, color = "#ffffff", bgColor = "rgba(15, 23, 42, 0.85)", isSpecial = false) {{
                 const canvas = document.createElement('canvas');
@@ -416,54 +481,48 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
             }}
 
             const assignedTarget = "{room_clean}";
+            const assignedFloorStr = "{floor_clean}";
             let targetPinMesh = null;
+            let targetRoomCoords = {{ x: -30, y: 0.5, z: 32 }};
             const floorGroups = [];
 
-            function createRoom(name, x, y, z, w, h, d, floorIdx) {{
+            function createClassroomUnit(name, x, y, z, w, h, d, floorIdx) {{
                 const group = new THREE.Group();
                 const geo = new THREE.BoxGeometry(w, h, d);
-                const isAssigned = (assignedTarget.length > 2 && name.replace(/\\s+/g, '').includes(assignedTarget));
+                const isAssigned = (assignedTarget.length > 2 && name.replace(/\s+/g, '').includes(assignedTarget));
                 
-                let mat;
-                if (isAssigned) {{
-                    mat = new THREE.MeshStandardMaterial({{
-                        color: 0x0284c7,
-                        emissive: 0x0ea5e9,
-                        emissiveIntensity: 0.8,
-                        transparent: true,
-                        opacity: 0.92,
-                        roughness: 0.2
-                    }});
-                }} else {{
-                    mat = new THREE.MeshStandardMaterial({{
-                        color: 0x1e293b,
-                        transparent: true,
-                        opacity: 0.72,
-                        roughness: 0.5
-                    }});
-                }}
+                const facadeTexture = createClassroomFacadeTexture(name, isAssigned);
                 
-                const mesh = new THREE.Mesh(geo, mat);
+                const wallMat = new THREE.MeshStandardMaterial({{
+                    color: isAssigned ? 0x0284c7 : 0xe2e8f0,
+                    roughness: 0.5
+                }});
+
+                const frontFacadeMat = new THREE.MeshStandardMaterial({{
+                    map: facadeTexture,
+                    roughness: 0.4,
+                    emissive: isAssigned ? 0x0369a1 : 0x000000,
+                    emissiveIntensity: isAssigned ? 0.7 : 0.0
+                }});
+
+                const mats = [wallMat, wallMat, wallMat, wallMat, frontFacadeMat, frontFacadeMat];
+                
+                const mesh = new THREE.Mesh(geo, mats);
                 mesh.position.set(0, h / 2, 0);
                 mesh.castShadow = true;
                 mesh.receiveShadow = true;
                 group.add(mesh);
 
-                const edges = new THREE.EdgesGeometry(geo);
-                const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({{
-                    color: isAssigned ? 0xfacc15 : 0x475569,
-                    linewidth: isAssigned ? 3 : 1
-                }}));
-                line.position.set(0, h / 2, 0);
-                group.add(line);
-
-                const label = makeTextSprite(name, isAssigned ? "#facc15" : "#cbd5e1", isAssigned ? "rgba(2, 132, 199, 0.95)" : "rgba(30, 41, 59, 0.85)", isAssigned);
-                label.position.set(0, h + 2.5, 0);
-                group.add(label);
-
                 if (isAssigned) {{
+                    targetRoomCoords = {{ x: x, y: (floorIdx * 11) + 2.5, z: z }};
+                    
+                    const edges = new THREE.EdgesGeometry(geo);
+                    const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({{ color: 0xfacc15, linewidth: 3 }}));
+                    line.position.set(0, h / 2, 0);
+                    group.add(line);
+
                     const pinGeo = new THREE.ConeGeometry(2, 5, 16);
-                    const pinMat = new THREE.MeshStandardMaterial({{ color: 0xfacc15, emissive: 0xeab308, emissiveIntensity: 0.9 }});
+                    const pinMat = new THREE.MeshStandardMaterial({{ color: 0xfacc15, emissive: 0xeab308, emissiveIntensity: 1.0 }});
                     const pin = new THREE.Mesh(pinGeo, pinMat);
                     pin.rotation.x = Math.PI;
                     pin.position.set(0, h + 9, 0);
@@ -477,20 +536,20 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
 
             function createFloorSlab(floorName) {{
                 const slabGroup = new THREE.Group();
-                const rear = new THREE.Mesh(new THREE.BoxGeometry(76, 0.6, 26), new THREE.MeshStandardMaterial({{ color: 0x0f172a, roughness: 0.7 }}));
+                const rear = new THREE.Mesh(new THREE.BoxGeometry(76, 0.8, 26), new THREE.MeshStandardMaterial({{ color: 0xcfd8dc, roughness: 0.6 }}));
                 rear.position.set(0, 0, -13);
                 slabGroup.add(rear);
 
-                const east = new THREE.Mesh(new THREE.BoxGeometry(16, 0.6, 38), new THREE.MeshStandardMaterial({{ color: 0x0f172a, roughness: 0.7 }}));
+                const east = new THREE.Mesh(new THREE.BoxGeometry(16, 0.8, 38), new THREE.MeshStandardMaterial({{ color: 0xcfd8dc, roughness: 0.6 }}));
                 east.position.set(-30, 0, 19);
                 slabGroup.add(east);
 
-                const west = new THREE.Mesh(new THREE.BoxGeometry(16, 0.6, 38), new THREE.MeshStandardMaterial({{ color: 0x0f172a, roughness: 0.7 }}));
+                const west = new THREE.Mesh(new THREE.BoxGeometry(16, 0.8, 38), new THREE.MeshStandardMaterial({{ color: 0xcfd8dc, roughness: 0.6 }}));
                 west.position.set(30, 0, 19);
                 slabGroup.add(west);
 
-                const banner = makeTextSprite(floorName, "#38bdf8", "rgba(15, 23, 42, 0.9)", true);
-                banner.position.set(0, 1, 38);
+                const banner = makeTextSprite(floorName, "#0284c7", "rgba(255, 255, 255, 0.95)", true);
+                banner.position.set(0, 1.2, 38);
                 banner.scale.set(16, 8, 1);
                 slabGroup.add(banner);
 
@@ -576,13 +635,28 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
                 const flGroup = new THREE.Group();
                 flGroup.add(createFloorSlab(cfg.name));
                 cfg.rooms.forEach(r => {{
-                    flGroup.add(createRoom(r.name, r.x, 0.3, r.z, r.w, r.h, r.d, idx));
+                    flGroup.add(createClassroomUnit(r.name, r.x, 0.4, r.z, r.w, r.h, r.d, idx));
                 }});
                 flGroup.position.y = baseFloorHeights[idx];
                 scene.add(flGroup);
                 floorGroups.push(flGroup);
             }});
 
+            // Central Block Glass Pyramid Rooftop Feature
+            const pyramidGeo = new THREE.ConeGeometry(12, 6, 4);
+            const pyramidMat = new THREE.MeshStandardMaterial({{
+                color: 0x0284c7,
+                roughness: 0.1,
+                metalness: 0.8,
+                transparent: true,
+                opacity: 0.85
+            }});
+            const pyramidMesh = new THREE.Mesh(pyramidGeo, pyramidMat);
+            pyramidMesh.rotation.y = Math.PI / 4;
+            pyramidMesh.position.set(0, 31, -16);
+            scene.add(pyramidMesh);
+
+            // 4 RED STAIRCASES
             const stairPositions = [
                 {{ name: "East Stairs (EB)", x: -30, z: 0, w: 12, d: 8 }},
                 {{ name: "Central Left Stairs", x: -9, z: 0, w: 9, d: 8 }},
@@ -591,7 +665,6 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
             ];
 
             const stairMeshes = [];
-
             stairPositions.forEach(pos => {{
                 const totalH = 29;
                 const shaftGeo = new THREE.BoxGeometry(pos.w, totalH, pos.d);
@@ -625,24 +698,94 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
                 scene.add(label);
             }});
 
+            // Wayfinding Pathway originating from East Wing Entrance Gate
+            let targetFloorY = 0.5;
+            if (assignedFloorStr.includes("1") || assignedFloorStr.includes("FIRST")) targetFloorY = 11.5;
+            if (assignedFloorStr.includes("2") || assignedFloorStr.includes("SECOND")) targetFloorY = 22.5;
+
+            const entranceOrigin = new THREE.Vector3(-36, 0.5, 42);
+
+            const pathPoints = [];
+            pathPoints.push(entranceOrigin.clone());
+            pathPoints.push(new THREE.Vector3(-30, 0.5, 38));
+
+            if (assignedTarget.includes("EB") || targetRoomCoords.x < -10) {{
+                if (targetFloorY > 1) {{
+                    pathPoints.push(new THREE.Vector3(-30, 0.5, 0));
+                    pathPoints.push(new THREE.Vector3(-30, targetFloorY, 0));
+                    pathPoints.push(new THREE.Vector3(-30, targetFloorY, targetRoomCoords.z));
+                }} else {{
+                    pathPoints.push(new THREE.Vector3(-30, 0.5, targetRoomCoords.z));
+                }}
+            }} else {{
+                pathPoints.push(new THREE.Vector3(-30, 0.5, 12));
+                if (assignedTarget.includes("WB") || targetRoomCoords.x > 10) {{
+                    pathPoints.push(new THREE.Vector3(30, 0.5, 12));
+                    if (targetFloorY > 1) {{
+                        pathPoints.push(new THREE.Vector3(30, 0.5, 0));
+                        pathPoints.push(new THREE.Vector3(30, targetFloorY, 0));
+                        pathPoints.push(new THREE.Vector3(30, targetFloorY, targetRoomCoords.z));
+                    }} else {{
+                        pathPoints.push(new THREE.Vector3(30, 0.5, targetRoomCoords.z));
+                    }}
+                }} else {{
+                    pathPoints.push(new THREE.Vector3(-9, 0.5, 12));
+                    if (targetFloorY > 1) {{
+                        pathPoints.push(new THREE.Vector3(-9, 0.5, 0));
+                        pathPoints.push(new THREE.Vector3(-9, targetFloorY, 0));
+                    }}
+                    pathPoints.push(new THREE.Vector3(targetRoomCoords.x, targetFloorY, targetRoomCoords.z));
+                }}
+            }}
+            pathPoints.push(new THREE.Vector3(targetRoomCoords.x, targetFloorY, targetRoomCoords.z));
+
+            const curve = new THREE.CatmullRomCurve3(pathPoints);
+            const tubeGeo = new THREE.TubeGeometry(curve, 90, 0.55, 8, false);
+            const tubeMat = new THREE.MeshStandardMaterial({{
+                color: 0x22c55e,
+                emissive: 0x16a34a,
+                emissiveIntensity: 0.95,
+                roughness: 0.2
+            }});
+            const pathTube = new THREE.Mesh(tubeGeo, tubeMat);
+            scene.add(pathTube);
+
+            const startMarker = makeTextSprite("📍 YOU ENTER HERE (EAST GATE)", "#22c55e", "rgba(15, 23, 42, 0.92)", true);
+            startMarker.position.set(entranceOrigin.x, 6, entranceOrigin.z);
+            scene.add(startMarker);
+
+            const ringGeo = new THREE.RingGeometry(2.5, 3.5, 32);
+            const ringMat = new THREE.MeshBasicMaterial({{ color: 0xef4444, side: THREE.DoubleSide }});
+            const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+            ringMesh.rotation.x = -Math.PI / 2;
+            ringMesh.position.set(entranceOrigin.x, 0.2, entranceOrigin.z);
+            scene.add(ringMesh);
+
+            const particleGeo = new THREE.SphereGeometry(1.2, 16, 16);
+            const particleMat = new THREE.MeshBasicMaterial({{ color: 0xffff00 }});
+            const walkerParticle = new THREE.Mesh(particleGeo, particleMat);
+            scene.add(walkerParticle);
+
             window.setExploded = function(isExploded) {{
                 floorGroups.forEach(fg => fg.visible = true);
                 if (isExploded) {{
                     floorGroups[0].position.y = 0;
                     floorGroups[1].position.y = 20;
                     floorGroups[2].position.y = 40;
+                    pyramidMesh.position.y = 49;
+                    if (cbFacadeMesh) cbFacadeMesh.position.y = 20;
                 }} else {{
                     floorGroups[0].position.y = baseFloorHeights[0];
                     floorGroups[1].position.y = baseFloorHeights[1];
                     floorGroups[2].position.y = baseFloorHeights[2];
+                    pyramidMesh.position.y = 31;
+                    if (cbFacadeMesh) cbFacadeMesh.position.y = 13.5;
                 }}
             }};
 
-            window.isolateFloor = function(flIdx) {{
-                floorGroups.forEach((fg, idx) => {{
-                    fg.visible = (idx === flIdx);
-                    if (idx === flIdx) fg.position.y = 0;
-                }});
+            window.focusDestination = function() {{
+                controls.target.set(targetRoomCoords.x, targetFloorY + 3, targetRoomCoords.z);
+                camera.position.set(targetRoomCoords.x + 25, targetFloorY + 20, targetRoomCoords.z + 25);
             }};
 
             window.resetView = function() {{
@@ -650,8 +793,10 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
                     fg.visible = true;
                     fg.position.y = baseFloorHeights[idx];
                 }});
-                camera.position.set(65, 55, 75);
-                controls.target.set(0, 15, 0);
+                pyramidMesh.position.y = 31;
+                if (cbFacadeMesh) cbFacadeMesh.position.y = 13.5;
+                camera.position.set(-58, 62, 78);
+                controls.target.set(0, 10, 0);
             }};
 
             const clock = new THREE.Clock();
@@ -664,6 +809,13 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
                     targetPinMesh.rotation.y += 0.04;
                 }}
                 
+                const progress = (t * 0.18) % 1;
+                const pt = curve.getPoint(progress);
+                walkerParticle.position.copy(pt);
+
+                const s = 1.0 + Math.sin(t * 5) * 0.15;
+                ringMesh.scale.set(s, s, 1);
+
                 stairMeshes.forEach(mesh => {{
                     mesh.material.emissiveIntensity = 0.5 + Math.sin(t * 3) * 0.25;
                 }});
@@ -795,52 +947,56 @@ elif st.session_state.current_page == 'Student':
                 """)
                 
                 st.markdown("---")
-                st.markdown("### 🌐 3D Interactive Campus Blueprint (Ground + 1st + 2nd Floor)")
-                st.caption("🖱️ **Drag to rotate 360° • Scroll to zoom • Use top buttons to separate floors.**")
+                st.markdown("### 🌐 Realistic Campus 3D Model & Walking Path")
+                st.caption("🟢 **Follow the green route from the East Wing Entrance Gate up to your room.** Click **'🎯 Focus Room'** to zoom straight into your classroom.")
                 
                 blueprint_3d_html = render_3d_college_blueprint(room, floor, bench)
-                components.html(blueprint_3d_html, height=570)
+                components.html(blueprint_3d_html, height=600)
                 
                 room_upper = str(room).upper()
                 if "EB" in room_upper:
-                    nearest_stair = "🔴 **East Wing Staircase** (adjacent to EB-106 / EB-206 / EB-306)"
-                elif "WB" in room_upper:
-                    nearest_stair = "🔴 **West Wing Staircase** (adjacent to WB-106 / WB-206 / WB-306)"
+                    nav_details = f"""
+                    1. **Start:** Enter through the **East Wing Main Gate** (marked with the red ring and green label).
+                    2. **Corridor:** {"Walk along the East Wing ground hallway directly to your room." if "GROUND" in str(floor).upper() or "0" in str(floor) else f"Step inside the East hallway, proceed straight to the 🔴 **East Wing Staircase (EB)**, and climb up to the **{floor}**."}
+                    3. **Destination:** Locate **{room}** (highlighted in blue with the yellow locator pin) and proceed to **Bench #{bench}**.
+                    """
                 else:
-                    nearest_stair = "🔴 **Central Stairs (Left or Right)** in the Main Courtyard Atrium"
+                    nav_details = f"""
+                    1. **Start:** Enter through the **East Wing Main Gate** (marked with the red ring).
+                    2. **Crossway:** Proceed through the connecting ground walkway toward the central block / west wing.
+                    3. **Ascent:** Take the nearest designated red staircase to the **{floor}**.
+                    4. **Destination:** Follow the green line to **{room}** and take your seat at **Bench #{bench}**.
+                    """
 
-                st.info(f"""
-                **🚶 Turn-by-Turn Navigation Steps:**
-                1. Enter through the **Main Front Courtyard / Atrium Gate**.
-                2. {"Stay on the Ground Floor and walk straight to your room." if "GROUND" in str(floor).upper() or "0" in str(floor) else f"To reach the {floor}, take the {nearest_stair}."}
-                3. Locate classroom **{room}** (indicated by the glowing beacon in the 3D map above) and sit at **Bench #{bench}**.
-                """)
+                st.info(f"**🚶 Turn-by-Turn Wayfinding Guide:**\n{nav_details}")
             else:
                 st.error("❌ No allotment found for this USN. Please verify your details at the Security Desk.")
 
 # --- PAGE: ADMIN ---
 elif st.session_state.current_page == 'Admin':
-    
     if st.session_state.admin_auth_step < 2:
         st.button("⬅️ Cancel & Return Home", on_click=navigate_to, args=('Home',))
         st.markdown("### 🔒 System Administrator Access")
         
-        # Step 1: Password & Email Verification
         if st.session_state.admin_auth_step == 0:
             current_stored_pass = get_admin_password()
             
             st.markdown("#### Step 1: Secure Login")
             admin_pass_input = st.text_input("Enter Master Password", type="password")
-            admin_email_input = st.text_input("Enter Admin Email Address for OTP Delivery", value="funguru528@gmail.com")
+            admin_email_input = st.text_input("Enter Admin Email Address for OTP Delivery", value="")
             
             if st.button("Send Verification OTP", type="primary"):
+                entered_email_clean = admin_email_input.strip().lower()
+                
                 if admin_pass_input != current_stored_pass:
                     st.error("❌ Incorrect master password.")
-                elif not admin_email_input or "@" not in admin_email_input:
-                    st.warning("⚠️ Please enter a valid email address.")
+                elif not entered_email_clean:
+                    st.warning("⚠️ Please enter your registered administrator email address.")
+                elif entered_email_clean != AUTHORIZED_ADMIN_EMAIL.lower():
+                    st.error(f"❌ Access Denied: '{admin_email_input}' is not recognized as an authorized administrator email.")
                 else:
                     st.session_state.generated_otp = "".join(random.choices(string.digits, k=6))
-                    st.session_state.admin_email = admin_email_input
+                    st.session_state.admin_email = entered_email_clean
                     
                     with st.spinner("Dispatching secure email to inbox..."):
                         email_success, email_msg = send_email_otp(st.session_state.admin_email, st.session_state.generated_otp)
@@ -854,14 +1010,13 @@ elif st.session_state.current_page == 'Admin':
                     st.session_state.admin_auth_step = 1
                     st.rerun()
         
-        # Step 2: OTP Verification
         elif st.session_state.admin_auth_step == 1:
-            st.success("✅ Password Verified.")
+            st.success("✅ Credentials & Email Verified.")
             
             if st.session_state.email_status == "sent":
-                st.info(f"📧 **Email OTP Sent!** Check your inbox ({st.session_state.admin_email}) for the 6-digit code.")
+                st.info(f"📧 **Email OTP Sent to {st.session_state.admin_email}!** Check your inbox for the 6-digit code.")
             else:
-                st.warning(f"⚠️ **Email Dispatch Status:** {st.session_state.email_status}")
+                st.error(f"⚠️ **Dispatch Diagnostic:** {st.session_state.email_status}")
                 st.info(f"📧 **Simulation/Fallback Mode OTP:** ` {st.session_state.generated_otp} `")
             
             otp_input = st.text_input("Step 2: Enter 6-Digit OTP Code", max_chars=6).strip()
@@ -879,7 +1034,6 @@ elif st.session_state.current_page == 'Admin':
                     st.session_state.admin_auth_step = 0
                     st.rerun()
 
-    # ADMIN DASHBOARD (Unlocked)
     if st.session_state.admin_auth_step == 2:
         col_head1, col_head2 = st.columns([3, 1])
         with col_head1:
@@ -897,7 +1051,6 @@ elif st.session_state.current_page == 'Admin':
         uploaded_file = st.file_uploader("Upload Student Master Sheet", type=["xlsx", "csv"])
         
         st.markdown("#### Step 2: Set Room Capacity & Floors")
-        
         default_rooms = pd.DataFrame([
             {"Room Number": "WB-209", "Floor": "1st Floor", "Capacity": 30},
             {"Room Number": "EB-201", "Floor": "1st Floor", "Capacity": 30},
@@ -949,7 +1102,7 @@ elif st.session_state.current_page == 'Admin':
                 st.download_button(
                     label="📥 Download Master Allotment CSV",
                     data=csv_buffer, 
-                    file_name="SVCE_Master_Allotment.csv", 
+                    file_name="SVCE_Master_Allotment.csv",
                     mime="text/csv"
                 )
                 
