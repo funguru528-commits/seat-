@@ -1,17 +1,14 @@
-import io
-import os
-import random
-import sqlite3
-import string
-import time
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-import smtplib
-
-import pandas as pd
-from PIL import Image, ImageDraw
 import streamlit as st
 import streamlit.components.v1 as components
+import pandas as pd
+import sqlite3
+import random
+import string
+import time
+import smtplib
+from email.mime.text import MIMEText
+from PIL import Image, ImageDraw
+import io
 
 # ==========================================
 # 1. SESSION STATE INITIALIZATION
@@ -19,13 +16,11 @@ import streamlit.components.v1 as components
 if 'current_page' not in st.session_state:
     st.session_state.current_page = 'Home'
 if 'admin_auth_step' not in st.session_state:
-    st.session_state.admin_auth_step = 0  # 0: Credentials, 1: OTP, 2: Access Granted
+    st.session_state.admin_auth_step = 0 # 0: Password & Email, 1: OTP Verification, 2: Access Granted
 if 'generated_otp' not in st.session_state:
     st.session_state.generated_otp = None
 if 'admin_email' not in st.session_state:
     st.session_state.admin_email = None
-if 'email_error_msg' not in st.session_state:
-    st.session_state.email_error_msg = None
 
 # ==========================================
 # 2. PAGE CONFIGURATION & DYNAMIC STYLING
@@ -37,6 +32,10 @@ st.set_page_config(
 )
 
 def inject_custom_styles():
+    """
+    Injects styles based on the active page.
+    CSS strings are flush-left to prevent Streamlit from rendering them as code blocks.
+    """
     if st.session_state.current_page in ['Home', 'Student']:
         css = """
 <style>
@@ -74,6 +73,7 @@ html, body, [class*="css"], .stMarkdown, .stText, input, button, select, textare
     font-weight: bold !important;
     font-size: 1.1rem !important;
 }
+/* Moving Campus Banner Styling */
 .campus-marquee {
     width: 100%;
     overflow: hidden;
@@ -166,13 +166,6 @@ def get_admin_password():
     conn.close()
     return pwd
 
-def update_admin_password(new_pwd):
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute('UPDATE admin_config SET password = ? WHERE id = (SELECT MAX(id) FROM admin_config)', (new_pwd,))
-    conn.commit()
-    conn.close()
-
 def save_allotments(df_allocated):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
@@ -194,54 +187,40 @@ def fetch_student_allotment(usn):
     conn.close()
     return data
 
-def get_all_allotments():
-    conn = sqlite3.connect(DB_FILE)
-    df = pd.read_sql_query("SELECT * FROM allotments", conn)
-    conn.close()
-    return df
-
 init_db()
 
 # ==========================================
-# 4. GMAIL SMTP DISPATCH (SAFE CREDENTIAL LOADING)
+# 4. GMAIL OTP INTEGRATION
 # ==========================================
-def get_credential(key_name, default_value=""):
-    try:
-        if key_name in st.secrets:
-            return st.secrets[key_name]
-    except Exception:
-        pass
-    return os.getenv(key_name, default_value)
-
-SENDER_EMAIL = get_credential("SENDER_EMAIL", "funguru528@gmail.com")
-SENDER_APP_PASSWORD = get_credential("SENDER_APP_PASSWORD", "your_16_char_app_password")
-
 def send_email_otp(target_email, otp):
-    """Sends OTP using standard smtplib on Port 587 (TLS) with robust error reporting."""
-    if "your_16_char_app_password" in SENDER_APP_PASSWORD or not SENDER_APP_PASSWORD:
-        return False, "SMTP Credentials Not Configured (Using On-Screen Display Fallback)"
+    """
+    Sends an email OTP using Gmail's SMTP server via funguru528@gmail.com
+    """
+    SENDER_EMAIL = "funguru528@gmail.com"
+    SENDER_APP_PASSWORD = "yigscoygwoqdbmsd"
 
     try:
-        msg = MIMEMultipart()
+        msg = MIMEText(f"Security Alert: Your SVCE Admin login OTP is {otp}. Do not share this with anyone.")
+        msg['Subject'] = 'SVCE Portal - Admin Login Verification'
         msg['From'] = SENDER_EMAIL
         msg['To'] = target_email
-        msg['Subject'] = "SVCE Portal - Admin Login Verification Code"
-        
-        body = f"Security Alert: Your SVCE Admin verification OTP is {otp}. Do not share this with anyone."
-        msg.attach(MIMEText(body, 'plain'))
-        
-        with smtplib.SMTP('smtp.gmail.com', 587, timeout=10) as server:
-            server.starttls()
+
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
             server.login(SENDER_EMAIL, SENDER_APP_PASSWORD)
             server.send_message(msg)
-        return True, "OTP email dispatched successfully!"
+            
+        return True, "Email Sent Successfully"
     except Exception as e:
-        return False, f"Email delivery failed: {str(e)}"
+        return False, str(e)
 
 # ==========================================
-# 5. MULTI-TIER 3D BLUEPRINT & NAVIGATION ENGINE
+# 5. MULTI-TIER 3D BLUEPRINT ENGINE (THREE.JS)
 # ==========================================
 def render_3d_college_blueprint(target_room, target_floor, bench_no):
+    """
+    Synthesizes Ground, 1st, and 2nd Floor blueprints with 4 Red Staircase connectors
+    into a fully rotatable, explodable 3D WebGL architecture model.
+    """
     room_clean = str(target_room).upper().strip().replace(" ", "")
     
     html_code = f"""
@@ -251,7 +230,7 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
         <meta charset="utf-8">
         <style>
             body {{ margin: 0; padding: 0; overflow: hidden; background: #070d1f; font-family: 'Times New Roman', serif; }}
-            #canvas-container {{ width: 100%; height: 580px; position: relative; }}
+            #canvas-container {{ width: 100%; height: 550px; position: relative; }}
             .overlay-ui {{
                 position: absolute;
                 top: 12px;
@@ -283,20 +262,6 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
                 border-radius: 4px;
                 font-weight: bold;
             }}
-            .nav-box {{
-                position: absolute;
-                bottom: 40px;
-                left: 12px;
-                background: rgba(15, 23, 42, 0.95);
-                border: 1px solid #facc15;
-                border-radius: 8px;
-                padding: 8px 14px;
-                color: #ffffff;
-                font-size: 12px;
-                z-index: 10;
-                max-width: 380px;
-            }}
-            .nav-box h5 {{ margin: 0 0 4px 0; color: #facc15; font-size: 13px; }}
             .view-toolbar {{
                 position: absolute;
                 top: 12px;
@@ -321,14 +286,14 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
             }}
             .controls-hint {{
                 position: absolute;
-                bottom: 8px;
+                bottom: 12px;
                 left: 12px;
                 right: 12px;
                 display: flex;
                 justify-content: space-between;
-                background: rgba(0,0,0,0.75);
+                background: rgba(0,0,0,0.65);
                 border-radius: 6px;
-                padding: 4px 12px;
+                padding: 6px 12px;
                 color: #94a3b8;
                 font-size: 11px;
                 z-index: 10;
@@ -344,11 +309,6 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
                 <p>Target Class: <span class="badge-assigned">{target_room} ({target_floor}, Bench #{bench_no})</span></p>
                 <p style="margin-top:4px;">Stairs: <span class="badge-stair">4 Red Vertical Connectors</span> linking Ground ⇄ 1st ⇄ 2nd</p>
             </div>
-
-            <div class="nav-box" id="nav-instructions">
-                <h5>🗺️ Active Navigation Path</h5>
-                <p id="nav-text">Calculating route from Main Entrance to room...</p>
-            </div>
             
             <div class="view-toolbar">
                 <button class="view-btn" onclick="setExploded(false)">🏢 Stacked View</button>
@@ -356,19 +316,19 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
                 <button class="view-btn" onclick="isolateFloor(0)">Gnd Floor</button>
                 <button class="view-btn" onclick="isolateFloor(1)">1st Floor</button>
                 <button class="view-btn" onclick="isolateFloor(2)">2nd Floor</button>
-                <button class="view-btn" onclick="resetView()">🔄 Reset View</button>
+                <button class="view-btn" onclick="resetView()">🔄 Reset 360°</button>
             </div>
 
             <div class="controls-hint">
                 <span>🖱️ <b>Left Click + Drag:</b> Rotate 360° | <b>Scroll:</b> Zoom | <b>Right Click:</b> Pan</span>
-                <span>🟡 <b>Glowing Line:</b> Live Wayfinding Route to your Class</span>
+                <span>🔴 <b>Red Towers:</b> Staircases Linking Adjacent Floors</span>
             </div>
         </div>
 
         <script>
             const container = document.getElementById('canvas-container');
             const width = container.clientWidth || 900;
-            const height = 580;
+            const height = 550;
 
             const scene = new THREE.Scene();
             scene.background = new THREE.Color(0x070d1f);
@@ -388,6 +348,7 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
             controls.maxPolarAngle = Math.PI / 2 - 0.02;
             controls.target.set(0, 15, 0);
 
+            // Lighting
             scene.add(new THREE.AmbientLight(0xffffff, 0.85));
             const sun = new THREE.DirectionalLight(0xffffff, 0.9);
             sun.position.set(50, 80, 40);
@@ -398,6 +359,7 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
             gridHelper.position.y = -0.5;
             scene.add(gridHelper);
 
+            // Text Sprite Helper
             function makeTextSprite(message, color = "#ffffff", bgColor = "rgba(15, 23, 42, 0.85)", isSpecial = false) {{
                 const canvas = document.createElement('canvas');
                 canvas.width = 256;
@@ -422,10 +384,9 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
 
             const assignedTarget = "{room_clean}";
             let targetPinMesh = null;
-            let targetCoords = null;
             const floorGroups = [];
-            const baseFloorHeights = [0, 11, 22];
 
+            // Helper to build room blocks
             function createRoom(name, x, y, z, w, h, d, floorIdx) {{
                 const group = new THREE.Group();
                 const geo = new THREE.BoxGeometry(w, h, d);
@@ -476,29 +437,27 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
                     pin.position.set(0, h + 9, 0);
                     group.add(pin);
                     targetPinMesh = pin;
-                    
-                    targetCoords = {{
-                        x: x,
-                        y: baseFloorHeights[floorIdx] + h / 2,
-                        z: z,
-                        floorIdx: floorIdx
-                    }};
                 }}
 
                 group.position.set(x, y, z);
                 return group;
             }}
 
+            // Helper to build floor slab
             function createFloorSlab(floorName) {{
                 const slabGroup = new THREE.Group();
+                // Base slab layout following blueprints
+                // Main Rear Block
                 const rear = new THREE.Mesh(new THREE.BoxGeometry(76, 0.6, 26), new THREE.MeshStandardMaterial({{ color: 0x0f172a, roughness: 0.7 }}));
                 rear.position.set(0, 0, -13);
                 slabGroup.add(rear);
 
+                // East Wing (Left)
                 const east = new THREE.Mesh(new THREE.BoxGeometry(16, 0.6, 38), new THREE.MeshStandardMaterial({{ color: 0x0f172a, roughness: 0.7 }}));
                 east.position.set(-30, 0, 19);
                 slabGroup.add(east);
 
+                // West Wing (Right)
                 const west = new THREE.Mesh(new THREE.BoxGeometry(16, 0.6, 38), new THREE.MeshStandardMaterial({{ color: 0x0f172a, roughness: 0.7 }}));
                 west.position.set(30, 0, 19);
                 slabGroup.add(west);
@@ -511,10 +470,14 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
                 return slabGroup;
             }}
 
+            // -------------------------------------------------------------
+            // BUILD 3 FLOORS FROM BLUEPRINTS
+            // -------------------------------------------------------------
             const floorConfigs = [
                 {{
                     name: "GROUND FLOOR",
                     rooms: [
+                        // East Wing (Left)
                         {{ name: "EB-101", x: -30, z: 32, w: 12, h: 5.5, d: 8 }},
                         {{ name: "EB-102", x: -30, z: 23, w: 12, h: 5.5, d: 8 }},
                         {{ name: "EB-103", x: -30, z: 14, w: 12, h: 5.5, d: 8 }},
@@ -524,7 +487,9 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
                         {{ name: "EB-108 Lab", x: -30, z: -22, w: 12, h: 5.5, d: 8 }},
                         {{ name: "EB-111 Lab", x: -16, z: -22, w: 12, h: 5.5, d: 8 }},
                         {{ name: "EB-122 Comp Center", x: -16, z: -13, w: 12, h: 5.5, d: 8 }},
+                        // Central Block
                         {{ name: "CB-111 Main Office", x: 0, z: -16, w: 16, h: 5.5, d: 18 }},
+                        // West Wing (Right)
                         {{ name: "WB-101 Studio", x: 30, z: 32, w: 12, h: 5.5, d: 8 }},
                         {{ name: "WB-102 Studio", x: 30, z: 23, w: 12, h: 5.5, d: 8 }},
                         {{ name: "WB-103 Studio", x: 30, z: 14, w: 12, h: 5.5, d: 8 }},
@@ -537,6 +502,7 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
                 {{
                     name: "FIRST FLOOR",
                     rooms: [
+                        // East Wing (Left)
                         {{ name: "EB-201 Lecture", x: -30, z: 32, w: 12, h: 5.5, d: 8 }},
                         {{ name: "EB-202 Lecture", x: -30, z: 23, w: 12, h: 5.5, d: 8 }},
                         {{ name: "EB-203 Lecture", x: -30, z: 14, w: 12, h: 5.5, d: 8 }},
@@ -545,9 +511,11 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
                         {{ name: "EB-207 Lab", x: -30, z: -13, w: 12, h: 5.5, d: 8 }},
                         {{ name: "EB-208 Lab", x: -30, z: -22, w: 12, h: 5.5, d: 8 }},
                         {{ name: "EB-213 Lab", x: -16, z: -13, w: 12, h: 5.5, d: 8 }},
+                        // Central Block
                         {{ name: "CB-204 Dean Office", x: -7, z: -15, w: 10, h: 5.5, d: 8 }},
                         {{ name: "CB-201 Placement", x: 7, z: -15, w: 10, h: 5.5, d: 8 }},
                         {{ name: "CB-203 Seminar Hall", x: 0, z: -22, w: 20, h: 5.5, d: 8 }},
+                        // West Wing (Right)
                         {{ name: "WB-201 Lecture", x: 30, z: 32, w: 12, h: 5.5, d: 8 }},
                         {{ name: "WB-202 Lecture", x: 30, z: 23, w: 12, h: 5.5, d: 8 }},
                         {{ name: "WB-203 Lecture", x: 30, z: 14, w: 12, h: 5.5, d: 8 }},
@@ -562,6 +530,7 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
                 {{
                     name: "SECOND FLOOR",
                     rooms: [
+                        // East Wing (Left)
                         {{ name: "EB-301 Lecture", x: -30, z: 32, w: 12, h: 5.5, d: 8 }},
                         {{ name: "EB-302 Lecture", x: -30, z: 23, w: 12, h: 5.5, d: 8 }},
                         {{ name: "EB-303 Lecture", x: -30, z: 14, w: 12, h: 5.5, d: 8 }},
@@ -570,7 +539,9 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
                         {{ name: "EB-307 Lecture", x: -30, z: -13, w: 12, h: 5.5, d: 8 }},
                         {{ name: "EB-308 Studio", x: -30, z: -22, w: 12, h: 5.5, d: 8 }},
                         {{ name: "EB-314 Comp Center", x: -16, z: -13, w: 12, h: 5.5, d: 8 }},
+                        // Central Block
                         {{ name: "CB-301 Auditorium", x: 0, z: -18, w: 22, h: 7, d: 16 }},
+                        // West Wing (Right)
                         {{ name: "WB-301 Lecture", x: 30, z: 32, w: 12, h: 5.5, d: 8 }},
                         {{ name: "WB-302 Lecture", x: 30, z: 23, w: 12, h: 5.5, d: 8 }},
                         {{ name: "WB-303 Lecture", x: 30, z: 14, w: 12, h: 5.5, d: 8 }},
@@ -584,6 +555,8 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
                 }}
             ];
 
+            const baseFloorHeights = [0, 11, 22];
+
             floorConfigs.forEach((cfg, idx) => {{
                 const flGroup = new THREE.Group();
                 flGroup.add(createFloorSlab(cfg.name));
@@ -595,6 +568,9 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
                 floorGroups.push(flGroup);
             }});
 
+            // -------------------------------------------------------------
+            // 4 RED STAIRCASES CONNECTING ADJACENT FLOORS (FROM BLUEPRINTS)
+            // -------------------------------------------------------------
             const stairPositions = [
                 {{ name: "East Stairs (EB)", x: -30, z: 0, w: 12, d: 8 }},
                 {{ name: "Central Left Stairs", x: -9, z: 0, w: 9, d: 8 }},
@@ -605,6 +581,7 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
             const stairMeshes = [];
 
             stairPositions.forEach(pos => {{
+                // Continuous Red Vertical Column / Shaft through all floors
                 const totalH = 29;
                 const shaftGeo = new THREE.BoxGeometry(pos.w, totalH, pos.d);
                 const shaftMat = new THREE.MeshStandardMaterial({{
@@ -620,11 +597,13 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
                 scene.add(shaft);
                 stairMeshes.push(shaft);
 
+                // Wireframe edges on stairs
                 const edges = new THREE.EdgesGeometry(shaftGeo);
                 const wire = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({{ color: 0xffffff, linewidth: 2 }}));
                 wire.position.set(pos.x, totalH / 2, pos.z);
                 scene.add(wire);
 
+                // Stair treads simulation
                 for (let stepY = 1; stepY < totalH; stepY += 2) {{
                     const stepGeo = new THREE.BoxGeometry(pos.w - 1, 0.4, pos.d - 1);
                     const step = new THREE.Mesh(stepGeo, new THREE.MeshBasicMaterial({{ color: 0xffffff }}));
@@ -632,68 +611,15 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
                     scene.add(step);
                 }}
 
+                // Stair Top Label
                 const label = makeTextSprite("🔴 " + pos.name, "#ffffff", "rgba(220, 38, 38, 0.9)", true);
                 label.position.set(pos.x, totalH + 3, pos.z);
                 scene.add(label);
             }});
 
-            let animatedMarker = null;
-            let pathCurve = null;
-
-            if (targetCoords) {{
-                let chosenStair = stairPositions[1];
-                if (targetCoords.x <= -20) chosenStair = stairPositions[0];
-                else if (targetCoords.x >= 20) chosenStair = stairPositions[3];
-
-                const entrancePoint = new THREE.Vector3(0, 1, 35);
-                const stairGnd = new THREE.Vector3(chosenStair.x, 1, chosenStair.z);
-                const stairTargetFl = new THREE.Vector3(chosenStair.x, targetCoords.y, chosenStair.z);
-                const destination = new THREE.Vector3(targetCoords.x, targetCoords.y, targetCoords.z);
-
-                const pathPoints = [entrancePoint];
-
-                if (targetCoords.floorIdx > 0) {{
-                    pathPoints.push(stairGnd);
-                    pathPoints.push(stairTargetFl);
-                }} else {{
-                    pathPoints.push(new THREE.Vector3(chosenStair.x, 1, chosenStair.z));
-                }}
-                pathPoints.push(destination);
-
-                const lineGeometry = new THREE.BufferGeometry().setFromPoints(pathPoints);
-                const lineMaterial = new THREE.LineDashedMaterial({{
-                    color: 0x38bdf8,
-                    linewidth: 4,
-                    scale: 1,
-                    dashSize: 2,
-                    gapSize: 1,
-                }});
-                const pathLine = new THREE.Line(lineGeometry, lineMaterial);
-                pathLine.computeLineDistances();
-                scene.add(pathLine);
-
-                const markerGeo = new THREE.SphereGeometry(1.2, 16, 16);
-                const markerMat = new THREE.MeshStandardMaterial({{
-                    color: 0xfacc15,
-                    emissive: 0xeab308,
-                    emissiveIntensity: 1.0
-                }});
-                animatedMarker = new THREE.Mesh(markerGeo, markerMat);
-                scene.add(animatedMarker);
-
-                pathCurve = new THREE.CatmullRomCurve3(pathPoints);
-
-                const navText = document.getElementById('nav-text');
-                if (targetCoords.floorIdx === 0) {{
-                    navText.innerHTML = `Enter Main Gate ➔ Walk along Ground Floor Corridor ➔ Proceed directly to <b>${{assignedTarget}}</b>.`;
-                }} else {{
-                    const flName = targetCoords.floorIdx === 1 ? "1st Floor" : "2nd Floor";
-                    navText.innerHTML = `Enter Main Gate ➔ Head to <b>${{chosenStair.name}}</b> ➔ Take Stairs up to <b>${{flName}}</b> ➔ Walk down corridor to <b>${{assignedTarget}}</b>.`;
-                }}
-            }} else {{
-                document.getElementById('nav-text').innerText = "Target room not found in layout map.";
-            }}
-
+            // -------------------------------------------------------------
+            // INTERACTIVE TOOLBAR FUNCTIONS
+            // -------------------------------------------------------------
             window.setExploded = function(isExploded) {{
                 floorGroups.forEach(fg => fg.visible = true);
                 if (isExploded) {{
@@ -723,241 +649,314 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
                 controls.target.set(0, 15, 0);
             }};
 
+            // -------------------------------------------------------------
+            // ANIMATION LOOP
+            // -------------------------------------------------------------
             const clock = new THREE.Clock();
             function animate() {{
                 requestAnimationFrame(animate);
                 const t = clock.getElapsedTime();
                 
+                // Floating pin animation
                 if (targetPinMesh) {{
                     targetPinMesh.position.y = 12 + Math.sin(t * 4) * 0.9;
                     targetPinMesh.rotation.y += 0.04;
                 }}
-
-                if (animatedMarker && pathCurve) {{
-                    const progress = (t * 0.25) % 1;
-                    const pos = pathCurve.getPointAt(progress);
-                    animatedMarker.position.copy(pos);
-                }}
                 
+                // Subtle pulse on Red Staircases
+                stairMeshes.forEach(mesh => {{
+                    mesh.material.emissiveIntensity = 0.5 + Math.sin(t * 3) * 0.25;
+                }});
+
                 controls.update();
                 renderer.render(scene, camera);
             }}
-
             animate();
 
             window.addEventListener('resize', () => {{
-                const w = container.clientWidth || 900;
-                camera.aspect = w / height;
+                const newW = container.clientWidth;
+                camera.aspect = newW / height;
                 camera.updateProjectionMatrix();
-                renderer.setSize(w, height);
+                renderer.setSize(newW, height);
             }});
         </script>
     </body>
     </html>
     """
-    components.html(html_code, height=600)
+    return html_code
 
 # ==========================================
-# 6. APP NAVIGATION & PAGES
+# 6. CAPTCHA & NAVIGATION
 # ==========================================
-def render_header():
-    col1, col2 = st.columns([1, 5])
-    with col1:
-        st.write("🎓")
-    with col2:
-        st.title("SVCE Bengaluru")
-        st.subheader("Sri Venkateshwara College of Engineering - Exam Portal")
-    st.divider()
+def generate_captcha_image(text):
+    img = Image.new('RGB', (160, 50), color=(240, 244, 248))
+    draw = ImageDraw.Draw(img)
+    for _ in range(6):
+        draw.line([(random.randint(0, 160), random.randint(0, 50)), 
+                   (random.randint(0, 160), random.randint(0, 50))], fill=(160, 170, 180), width=2)
+    draw.text((25, 12), text, fill=(10, 20, 40))
+    buf = io.BytesIO()
+    img.save(buf, format='PNG')
+    return buf.getvalue()
 
-def render_marquee():
+if "student_captcha" not in st.session_state:
+    st.session_state.student_captcha = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
+
+def refresh_student_captcha():
+    st.session_state.student_captcha = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
+
+def navigate_to(page):
+    st.session_state.current_page = page
+    if page == 'Home':
+        st.session_state.admin_auth_step = 0
+        st.session_state.generated_otp = None
+        st.session_state.admin_email = None
+    st.rerun()
+
+# ==========================================
+# 7. PAGE ROUTING
+# ==========================================
+
+# --- PAGE: HOME ---
+if st.session_state.current_page == 'Home':
+    st.title("🎓 Sri Venkateshwara College of Engineering")
+    st.subheader("Welcome to the Seat Allotment Portal")
+    
     marquee_html = """
     <div class="campus-marquee">
         <div class="campus-marquee-track">
-            <img src="https://svcengg.edu.in/assets/bgimages/IMG_9641.webp" alt="Campus View 1">
-            <img src="https://svcengg.edu.in/assets/bgimages/IMG_9643.webp" alt="Campus View 2">
-            <img src="https://svcengg.edu.in/assets/bgimages/IMG_9645.webp" alt="Campus View 3">
-            <img src="https://svcengg.edu.in/assets/bgimages/IMG_9641.webp" alt="Campus View 1">
-            <img src="https://svcengg.edu.in/assets/bgimages/IMG_9643.webp" alt="Campus View 2">
-            <img src="https://svcengg.edu.in/assets/bgimages/IMG_9645.webp" alt="Campus View 3">
+            <img src="https://svcengg.edu.in/assets/bgimages/IMG_9641.webp" alt="SVCE Campus 1"/>
+            <img src="https://svcengg.edu.in/assets/bgimages/IMG_9641.webp" alt="SVCE Campus 2"/>
+            <img src="https://svcengg.edu.in/assets/bgimages/IMG_9641.webp" alt="SVCE Campus 3"/>
+            <img src="https://svcengg.edu.in/assets/bgimages/IMG_9641.webp" alt="SVCE Campus 4"/>
+            <img src="https://svcengg.edu.in/assets/bgimages/IMG_9641.webp" alt="SVCE Campus 5"/>
+            <img src="https://svcengg.edu.in/assets/bgimages/IMG_9641.webp" alt="SVCE Campus 6"/>
+            <img src="https://svcengg.edu.in/assets/bgimages/IMG_9641.webp" alt="SVCE Campus 7"/>
+            <img src="https://svcengg.edu.in/assets/bgimages/IMG_9641.webp" alt="SVCE Campus 8"/>
         </div>
     </div>
     """
     st.markdown(marquee_html, unsafe_allow_html=True)
-
-# Navigation Bar
-nav_col1, nav_col2, nav_col3 = st.columns(3)
-with nav_col1:
-    if st.button("🏠 Home", use_container_width=True):
-        st.session_state.current_page = 'Home'
-        st.rerun()
-with nav_col2:
-    if st.button("👨‍🎓 Student Portal", use_container_width=True):
-        st.session_state.current_page = 'Student'
-        st.rerun()
-with nav_col3:
-    if st.button("🔒 Admin Portal", use_container_width=True):
-        st.session_state.current_page = 'Admin'
-        st.rerun()
-
-st.write("---")
-
-# ------------------------------------------
-# PAGE 1: HOME
-# ------------------------------------------
-if st.session_state.current_page == 'Home':
-    render_header()
-    render_marquee()
-    st.markdown("""
-    ### Welcome to the SVCE Examination & Seating Management Portal
+    st.markdown("Please select your role to continue:")
     
-    This portal allows students to view their real-time seat allotments and navigate campus exam halls using our **3D Wayfinding Blueprint Engine**.
-    
-    * **Students:** Click on **Student Portal** above to enter your USN and locate your exam room and bench.
-    * **Administrators:** Access the **Admin Portal** to upload master student lists, generate randomized seating allocations, and update credentials.
-    """)
+    st.write("") 
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        if st.button("🧑‍🎓 I am a Student", use_container_width=True):
+            navigate_to('Student')
+        st.write("")
+        if st.button("🔐 I am an Admin", use_container_width=True):
+            navigate_to('Admin')
 
-# ------------------------------------------
-# PAGE 2: STUDENT PORTAL
-# ------------------------------------------
+# --- PAGE: STUDENT ---
 elif st.session_state.current_page == 'Student':
-    render_header()
-    st.subheader("🔎 Student Seating Allotment Finder")
+    st.button("⬅️ Back to Home", on_click=navigate_to, args=('Home',))
+    st.markdown("### Find Your Room & Seat Allotment")
     
-    usn_input = st.text_input("Enter your USN (e.g., 1VE21CS001):", placeholder="1VE...").strip().upper()
+    usn_input = st.text_input("Enter your USN / Registration Number:").strip().upper()
     
-    if st.button("Search Allotment", type="primary"):
-        if not usn_input:
-            st.warning("Please enter a valid USN.")
-        else:
-            data = fetch_student_allotment(usn_input)
-            if data:
-                usn, name, college, event, room, floor, bench = data
-                st.success(f"Allotment Found for {name} ({usn})")
-                
-                col1, col2, col3 = st.columns(3)
-                col1.metric("Exam/Event", event)
-                col2.metric("Room Number", room)
-                col3.metric("Bench Number", f"Bench #{bench} ({floor})")
-                
-                st.markdown("### 🗺️ 3D Campus Navigation & Seat Blueprint")
-                render_3d_college_blueprint(room, floor, bench)
-            else:
-                st.error("No allotment found for the entered USN. Please verify with the exam controller.")
-
-# ------------------------------------------
-# PAGE 3: ADMIN PORTAL
-# ------------------------------------------
-elif st.session_state.current_page == 'Admin':
-    st.title("🔒 Admin Management Portal")
+    col_cap1, col_cap2 = st.columns([1, 2])
+    with col_cap1:
+        captcha_bytes = generate_captcha_image(st.session_state.student_captcha)
+        st.image(captcha_bytes, caption="Verification CAPTCHA Code")
+    with col_cap2:
+        captcha_input = st.text_input("Enter CAPTCHA Code:").strip().upper()
     
-    # Step 0: Authentication
-    if st.session_state.admin_auth_step == 0:
-        st.subheader("Admin Login")
-        admin_email = st.text_input("Admin Email Address", placeholder="admin@svce.edu.in")
-        admin_pass = st.text_input("Admin Password", type="password")
-        
-        if st.button("Request Verification OTP"):
-            if admin_pass == get_admin_password() and admin_email:
-                otp = ''.join(random.choices(string.digits, k=6))
-                st.session_state.generated_otp = otp
-                st.session_state.admin_email = admin_email
-                
-                success, msg = send_email_otp(admin_email, otp)
-                if success:
-                    st.success(msg)
-                else:
-                    st.warning(f"{msg}\n\n👉 **Fallback OTP (for testing):** `{otp}`")
-                
-                st.session_state.admin_auth_step = 1
-                st.rerun()
-            else:
-                st.error("Invalid password or missing email.")
-                
-    # Step 1: OTP Verification
-    elif st.session_state.admin_auth_step == 1:
-        st.subheader(f"Enter OTP sent to {st.session_state.admin_email}")
-        user_otp = st.text_input("6-Digit OTP", max_chars=6)
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("Verify OTP", type="primary"):
-                if user_otp == st.session_state.generated_otp:
-                    st.session_state.admin_auth_step = 2
-                    st.success("Access Granted!")
-                    st.rerun()
-                else:
-                    st.error("Invalid OTP code.")
-        with col2:
-            if st.button("Back to Login"):
-                st.session_state.admin_auth_step = 0
-                st.rerun()
-
-    # Step 2: Admin Dashboard
-    elif st.session_state.admin_auth_step == 2:
-        st.success("Authenticated as Administrator")
-        
-        tab1, tab2, tab3 = st.tabs(["📋 Upload & Allocate Seating", "📊 Current Allotments", "🔑 Security Settings"])
-        
-        with tab1:
-            st.subheader("Generate Seating Allocations")
-            uploaded_file = st.file_uploader("Upload Student List CSV/Excel", type=["csv", "xlsx"])
-            
-            if uploaded_file:
-                if uploaded_file.name.endswith('.csv'):
-                    df = pd.read_csv(uploaded_file)
-                else:
-                    df = pd.read_excel(uploaded_file)
-                
-                st.write("Preview Uploaded Data:", df.head())
-                
-                required_cols = ['USN', 'Student Name', 'College Name', 'Event/Exam Name']
-                if all(col in df.columns for col in required_cols):
-                    if st.button("Randomize & Save Allotments"):
-                        rooms = ['EB-101', 'EB-102', 'EB-201', 'EB-202', 'WB-101', 'WB-201', 'CB-301']
-                        floors = ['Ground Floor', 'Ground Floor', 'First Floor', 'First Floor', 'Ground Floor', 'First Floor', 'Second Floor']
-                        
-                        allocated_rows = []
-                        for idx, row in df.iterrows():
-                            r_idx = random.randint(0, len(rooms) - 1)
-                            allocated_rows.append({
-                                'USN': row['USN'],
-                                'Student Name': row['Student Name'],
-                                'College Name': row['College Name'],
-                                'Event/Exam Name': row['Event/Exam Name'],
-                                'Room Number': rooms[r_idx],
-                                'Floor': floors[r_idx],
-                                'Bench Number': random.randint(1, 30)
-                            })
-                        
-                        df_allocated = pd.DataFrame(allocated_rows)
-                        save_allotments(df_allocated)
-                        st.success("Seating allocation generated and saved to database successfully!")
-                else:
-                    st.error(f"Missing required columns. File must contain: {', '.join(required_cols)}")
-
-        with tab2:
-            st.subheader("Database Master Allotment List")
-            df_all = get_all_allotments()
-            if not df_all.empty:
-                st.dataframe(df_all, use_container_width=True)
-                csv = df_all.to_csv(index=False).encode('utf-8')
-                st.download_button("Download Allotment CSV", data=csv, file_name="SVCE_Exam_Allotments.csv", mime="text/csv")
-            else:
-                st.info("No allotments currently found in database.")
-
-        with tab3:
-            st.subheader("Change Admin Password")
-            new_password = st.text_input("New Password", type="password")
-            confirm_password = st.text_input("Confirm New Password", type="password")
-            
-            if st.button("Update Password"):
-                if new_password and new_password == confirm_password:
-                    update_admin_password(new_password)
-                    st.success("Admin password updated successfully!")
-                else:
-                    st.error("Passwords do not match or are empty.")
-                    
-        st.divider()
-        if st.button("Log Out"):
-            st.session_state.admin_auth_step = 0
+    col_btn1, col_btn2 = st.columns([1, 1])
+    with col_btn1:
+        if st.button("🔄 Refresh CAPTCHA"):
+            refresh_student_captcha()
             st.rerun()
+
+    with col_btn2:
+        search_clicked = st.button("🔍 Search Allotment", type="primary")
+
+    if search_clicked:
+        if captcha_input != st.session_state.student_captcha:
+            st.error("❌ Incorrect CAPTCHA. Please try again.")
+            refresh_student_captcha()
+        elif not usn_input:
+            st.warning("⚠️ Please enter a valid USN.")
+        else:
+            student = fetch_student_allotment(usn_input)
+            if student:
+                usn, name, college, event, room, floor, bench = student
+                st.success(f"✅ Allotment Found for **{name}**")
+                
+                # Allotment Details Card
+                st.markdown(f"""
+                ### 📋 Your Allotment Details:
+                * **Student Name:** `{name}`
+                * **USN:** `{usn}`
+                * **College:** `{college}`
+                * **Exam/Event:** `{event}`
+                * **Assigned Room:** **{room}**
+                * **Floor:** **{floor}**
+                * **Bench Number:** **Bench #{bench}**
+                """)
+                
+                st.markdown("---")
+                st.markdown("### 🌐 3D Interactive Campus Blueprint (Ground + 1st + 2nd Floor)")
+                st.caption("🖱️ **Drag to rotate 360° • Scroll to zoom • Use top buttons to separate floors.**")
+                
+                # Render 3D Model with Red Stairs and Highlighted Classroom
+                blueprint_3d_html = render_3d_college_blueprint(room, floor, bench)
+                components.html(blueprint_3d_html, height=570)
+                
+                # Dynamic Stairway Navigation Guidance
+                room_upper = str(room).upper()
+                if "EB" in room_upper:
+                    nearest_stair = "🔴 **East Wing Staircase** (adjacent to EB-106 / EB-206 / EB-306)"
+                elif "WB" in room_upper:
+                    nearest_stair = "🔴 **West Wing Staircase** (adjacent to WB-106 / WB-206 / WB-306)"
+                else:
+                    nearest_stair = "🔴 **Central Stairs (Left or Right)** in the Main Courtyard Atrium"
+
+                st.info(f"""
+                **🚶 Turn-by-Turn Navigation Steps:**
+                1. Enter through the **Main Front Courtyard / Atrium Gate**.
+                2. {"Stay on the Ground Floor and walk straight to your room." if "GROUND" in str(floor).upper() or "0" in str(floor) else f"To reach the {floor}, take the {nearest_stair}."}
+                3. Locate classroom **{room}** (indicated by the glowing beacon in the 3D map above) and sit at **Bench #{bench}**.
+                """)
+            else:
+                st.error("❌ No allotment found for this USN. Please verify your details at the Security Desk.")
+
+# --- PAGE: ADMIN ---
+elif st.session_state.current_page == 'Admin':
+    
+    # ADMIN AUTHENTICATION FLOW
+    if st.session_state.admin_auth_step < 2:
+        st.button("⬅️ Cancel & Return Home", on_click=navigate_to, args=('Home',))
+        st.markdown("### 🔒 System Administrator Access")
+        
+        # Step 1: Password & Email Verification
+        if st.session_state.admin_auth_step == 0:
+            current_stored_pass = get_admin_password()
+            
+            st.markdown("#### Step 1: Secure Login")
+            admin_pass_input = st.text_input("Enter Master Password", type="password")
+            admin_email_input = st.text_input("Enter Admin Email Address for OTP Delivery", value="funguru528@gmail.com")
+            
+            if st.button("Send Verification OTP", type="primary"):
+                if admin_pass_input != current_stored_pass:
+                    st.error("❌ Incorrect master password.")
+                elif not admin_email_input or "@" not in admin_email_input:
+                    st.warning("⚠️ Please enter a valid email address.")
+                else:
+                    st.session_state.generated_otp = "".join(random.choices(string.digits, k=6))
+                    st.session_state.admin_email = admin_email_input
+                    
+                    with st.spinner("Dispatching secure email to inbox..."):
+                        email_success, email_msg = send_email_otp(st.session_state.admin_email, st.session_state.generated_otp)
+                        time.sleep(1)
+                        
+                    if email_success:
+                        st.session_state.email_status = "sent"
+                    else:
+                        st.session_state.email_status = email_msg
+                    
+                    st.session_state.admin_auth_step = 1
+                    st.rerun()
+        
+        # Step 2: OTP Verification
+        elif st.session_state.admin_auth_step == 1:
+            st.success("✅ Password Verified.")
+            
+            if st.session_state.email_status == "sent":
+                st.info(f"📧 **Email OTP Sent from funguru528@gmail.com!** Check your inbox ({st.session_state.admin_email}) for the 6-digit code.")
+            else:
+                st.warning(f"⚠️ **Email Dispatch Status:** {st.session_state.email_status}. Operating in Fallback/Simulation Mode.")
+                st.info(f"📧 **Simulation/Fallback Mode OTP:** ` {st.session_state.generated_otp} `")
+            
+            otp_input = st.text_input("Step 2: Enter 6-Digit OTP Code", max_chars=6).strip()
+            
+            col_otp1, col_otp2 = st.columns([1, 1])
+            with col_otp1:
+                if st.button("Verify & Login", type="primary"):
+                    if otp_input == st.session_state.generated_otp:
+                        st.session_state.admin_auth_step = 2
+                        st.rerun()
+                    else:
+                        st.error("❌ Invalid or incorrect OTP code. Please try again.")
+            with col_otp2:
+                if st.button("Cancel / Restart Login"):
+                    st.session_state.admin_auth_step = 0
+                    st.rerun()
+
+    # ADMIN DASHBOARD (Unlocked)
+    if st.session_state.admin_auth_step == 2:
+        col_head1, col_head2 = st.columns([3, 1])
+        with col_head1:
+            st.success("🔓 Administrator Session Active.")
+        with col_head2:
+            if st.button("🚪 Admin Logout", type="secondary"):
+                st.session_state.admin_auth_step = 0
+                st.session_state.generated_otp = None
+                navigate_to('Home')
+
+        st.markdown("### Admin Panel — Automated Room Allocation")
+        
+        st.markdown("#### Step 1: Upload Student List")
+        st.caption("Required Excel/CSV columns: `USN`, `Student Name`, `College Name`, `Event/Exam Name`")
+        uploaded_file = st.file_uploader("Upload Student Master Sheet", type=["xlsx", "csv"])
+        
+        st.markdown("#### Step 2: Set Room Capacity & Floors")
+        
+        # Updated Default Rooms matching the actual College Blueprint
+        default_rooms = pd.DataFrame([
+            {"Room Number": "WB-209", "Floor": "1st Floor", "Capacity": 30},
+            {"Room Number": "EB-201", "Floor": "1st Floor", "Capacity": 30},
+            {"Room Number": "WB-308", "Floor": "2nd Floor", "Capacity": 35},
+            {"Room Number": "CB-301", "Floor": "2nd Floor", "Capacity": 35},
+        ])
+        edited_rooms = st.data_editor(default_rooms, num_rows="dynamic")
+        
+        if uploaded_file and st.button("⚙️ Generate & Save Allotments", type="primary"):
+            try:
+                if uploaded_file.name.endswith(".csv"):
+                    df_students = pd.read_csv(uploaded_file)
+                else:
+                    df_students = pd.read_excel(uploaded_file)
+                
+                allocated_data = []
+                student_idx = 0
+                total_students = len(df_students)
+                
+                for _, room_row in edited_rooms.iterrows():
+                    r_num = room_row["Room Number"]
+                    r_floor = room_row["Floor"]
+                    cap = int(room_row["Capacity"])
+                    
+                    bench = 1
+                    for _ in range(cap):
+                        if student_idx >= total_students:
+                            break
+                        student = df_students.iloc[student_idx]
+                        allocated_data.append({
+                            "USN": str(student["USN"]).strip().upper(),
+                            "Student Name": student["Student Name"],
+                            "College Name": student["College Name"],
+                            "Event/Exam Name": student["Event/Exam Name"],
+                            "Room Number": r_num,
+                            "Floor": r_floor,
+                            "Bench Number": bench
+                        })
+                        student_idx += 1
+                        bench += 1
+                        
+                df_final = pd.DataFrame(allocated_data)
+                save_allotments(df_final)
+                
+                st.success(f"🎉 Successfully allocated {len(df_final)} of {total_students} students!")
+                st.dataframe(df_final)
+                
+                csv_buffer = df_final.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="📥 Download Master Allotment CSV",
+                    data=csv_buffer, 
+                    file_name="SVCE_Master_Allotment.csv",
+                    mime="text/csv"
+                )
+                
+            except Exception as e:
+                st.error(f"❌ Error during processing: {str(e)}")
