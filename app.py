@@ -203,13 +203,13 @@ init_db()
 # ==========================================
 # 4. GMAIL SMTP DISPATCH (WITH FALLBACK)
 # ==========================================
-# Update these with your valid Gmail address and 16-character App Password if available
-SENDER_EMAIL = "your_email@gmail.com"        
-SENDER_APP_PASSWORD = "your_app_password"    
+# Pull credentials directly from Streamlit secrets (or replace strings directly for local testing)
+SENDER_EMAIL = st.secrets.get("SENDER_EMAIL", "funguru528@gmail.com")        
+SENDER_APP_PASSWORD = st.secrets.get("SENDER_APP_PASSWORD", "your_16_char_app_password")    
 
 def send_email_otp(target_email, otp):
     """Sends OTP using standard smtplib on Port 587 (TLS) with robust error reporting."""
-    if "your_email@gmail.com" in SENDER_EMAIL or "your_app_password" in SENDER_APP_PASSWORD:
+    if "your_16_char_app_password" in SENDER_APP_PASSWORD or not SENDER_APP_PASSWORD:
         return False, "SMTP Credentials Not Configured (Using On-Screen Display Fallback)"
 
     try:
