@@ -32,10 +32,6 @@ st.set_page_config(
 )
 
 def inject_custom_styles():
-    """
-    Injects styles based on the active page.
-    CSS strings are flush-left to prevent Streamlit from rendering them as code blocks.
-    """
     if st.session_state.current_page in ['Home', 'Student']:
         css = """
 <style>
@@ -73,7 +69,6 @@ html, body, [class*="css"], .stMarkdown, .stText, input, button, select, textare
     font-weight: bold !important;
     font-size: 1.1rem !important;
 }
-/* Moving Campus Banner Styling */
 .campus-marquee {
     width: 100%;
     overflow: hidden;
@@ -194,18 +189,25 @@ init_db()
 # ==========================================
 def send_email_otp(target_email, otp):
     """
-    Sends an email OTP using Gmail's SMTP server via funguru528@gmail.com
+    Sends an email OTP using Gmail's SMTP server via Port 587 (STARTTLS).
     """
     SENDER_EMAIL = "funguru528@gmail.com"
     SENDER_APP_PASSWORD = "yigscoygwoqdbmsd"
 
     try:
-        msg = MIMEText(f"Security Alert: Your SVCE Admin login OTP is {otp}. Do not share this with anyone.")
+        msg = MIMEText(
+            f"Security Alert: Your SVCE Admin login OTP is {otp}.\n\nDo not share this with anyone.",
+            "plain",
+            "utf-8"
+        )
         msg['Subject'] = 'SVCE Portal - Admin Login Verification'
         msg['From'] = SENDER_EMAIL
         msg['To'] = target_email
 
-        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+        with smtplib.SMTP('smtp.gmail.com', 587, timeout=15) as server:
+            server.ehlo()
+            server.starttls()
+            server.ehlo()
             server.login(SENDER_EMAIL, SENDER_APP_PASSWORD)
             server.send_message(msg)
             
@@ -217,10 +219,6 @@ def send_email_otp(target_email, otp):
 # 5. MULTI-TIER 3D BLUEPRINT ENGINE (THREE.JS)
 # ==========================================
 def render_3d_college_blueprint(target_room, target_floor, bench_no):
-    """
-    Synthesizes Ground, 1st, and 2nd Floor blueprints with 4 Red Staircase connectors
-    into a fully rotatable, explodable 3D WebGL architecture model.
-    """
     room_clean = str(target_room).upper().strip().replace(" ", "")
     
     html_code = f"""
@@ -359,7 +357,6 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
             gridHelper.position.y = -0.5;
             scene.add(gridHelper);
 
-            // Text Sprite Helper
             function makeTextSprite(message, color = "#ffffff", bgColor = "rgba(15, 23, 42, 0.85)", isSpecial = false) {{
                 const canvas = document.createElement('canvas');
                 canvas.width = 256;
@@ -386,11 +383,10 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
             let targetPinMesh = null;
             const floorGroups = [];
 
-            // Helper to build room blocks
             function createRoom(name, x, y, z, w, h, d, floorIdx) {{
                 const group = new THREE.Group();
                 const geo = new THREE.BoxGeometry(w, h, d);
-                const isAssigned = (assignedTarget.length > 2 && name.replace(/\s+/g, '').includes(assignedTarget));
+                const isAssigned = (assignedTarget.length > 2 && name.replace(/\\s+/g, '').includes(assignedTarget));
                 
                 let mat;
                 if (isAssigned) {{
@@ -443,21 +439,16 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
                 return group;
             }}
 
-            // Helper to build floor slab
             function createFloorSlab(floorName) {{
                 const slabGroup = new THREE.Group();
-                // Base slab layout following blueprints
-                // Main Rear Block
                 const rear = new THREE.Mesh(new THREE.BoxGeometry(76, 0.6, 26), new THREE.MeshStandardMaterial({{ color: 0x0f172a, roughness: 0.7 }}));
                 rear.position.set(0, 0, -13);
                 slabGroup.add(rear);
 
-                // East Wing (Left)
                 const east = new THREE.Mesh(new THREE.BoxGeometry(16, 0.6, 38), new THREE.MeshStandardMaterial({{ color: 0x0f172a, roughness: 0.7 }}));
                 east.position.set(-30, 0, 19);
                 slabGroup.add(east);
 
-                // West Wing (Right)
                 const west = new THREE.Mesh(new THREE.BoxGeometry(16, 0.6, 38), new THREE.MeshStandardMaterial({{ color: 0x0f172a, roughness: 0.7 }}));
                 west.position.set(30, 0, 19);
                 slabGroup.add(west);
@@ -470,14 +461,10 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
                 return slabGroup;
             }}
 
-            // -------------------------------------------------------------
-            // BUILD 3 FLOORS FROM BLUEPRINTS
-            // -------------------------------------------------------------
             const floorConfigs = [
                 {{
                     name: "GROUND FLOOR",
                     rooms: [
-                        // East Wing (Left)
                         {{ name: "EB-101", x: -30, z: 32, w: 12, h: 5.5, d: 8 }},
                         {{ name: "EB-102", x: -30, z: 23, w: 12, h: 5.5, d: 8 }},
                         {{ name: "EB-103", x: -30, z: 14, w: 12, h: 5.5, d: 8 }},
@@ -487,9 +474,7 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
                         {{ name: "EB-108 Lab", x: -30, z: -22, w: 12, h: 5.5, d: 8 }},
                         {{ name: "EB-111 Lab", x: -16, z: -22, w: 12, h: 5.5, d: 8 }},
                         {{ name: "EB-122 Comp Center", x: -16, z: -13, w: 12, h: 5.5, d: 8 }},
-                        // Central Block
                         {{ name: "CB-111 Main Office", x: 0, z: -16, w: 16, h: 5.5, d: 18 }},
-                        // West Wing (Right)
                         {{ name: "WB-101 Studio", x: 30, z: 32, w: 12, h: 5.5, d: 8 }},
                         {{ name: "WB-102 Studio", x: 30, z: 23, w: 12, h: 5.5, d: 8 }},
                         {{ name: "WB-103 Studio", x: 30, z: 14, w: 12, h: 5.5, d: 8 }},
@@ -502,7 +487,6 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
                 {{
                     name: "FIRST FLOOR",
                     rooms: [
-                        // East Wing (Left)
                         {{ name: "EB-201 Lecture", x: -30, z: 32, w: 12, h: 5.5, d: 8 }},
                         {{ name: "EB-202 Lecture", x: -30, z: 23, w: 12, h: 5.5, d: 8 }},
                         {{ name: "EB-203 Lecture", x: -30, z: 14, w: 12, h: 5.5, d: 8 }},
@@ -511,11 +495,9 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
                         {{ name: "EB-207 Lab", x: -30, z: -13, w: 12, h: 5.5, d: 8 }},
                         {{ name: "EB-208 Lab", x: -30, z: -22, w: 12, h: 5.5, d: 8 }},
                         {{ name: "EB-213 Lab", x: -16, z: -13, w: 12, h: 5.5, d: 8 }},
-                        // Central Block
                         {{ name: "CB-204 Dean Office", x: -7, z: -15, w: 10, h: 5.5, d: 8 }},
                         {{ name: "CB-201 Placement", x: 7, z: -15, w: 10, h: 5.5, d: 8 }},
                         {{ name: "CB-203 Seminar Hall", x: 0, z: -22, w: 20, h: 5.5, d: 8 }},
-                        // West Wing (Right)
                         {{ name: "WB-201 Lecture", x: 30, z: 32, w: 12, h: 5.5, d: 8 }},
                         {{ name: "WB-202 Lecture", x: 30, z: 23, w: 12, h: 5.5, d: 8 }},
                         {{ name: "WB-203 Lecture", x: 30, z: 14, w: 12, h: 5.5, d: 8 }},
@@ -530,7 +512,6 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
                 {{
                     name: "SECOND FLOOR",
                     rooms: [
-                        // East Wing (Left)
                         {{ name: "EB-301 Lecture", x: -30, z: 32, w: 12, h: 5.5, d: 8 }},
                         {{ name: "EB-302 Lecture", x: -30, z: 23, w: 12, h: 5.5, d: 8 }},
                         {{ name: "EB-303 Lecture", x: -30, z: 14, w: 12, h: 5.5, d: 8 }},
@@ -539,9 +520,7 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
                         {{ name: "EB-307 Lecture", x: -30, z: -13, w: 12, h: 5.5, d: 8 }},
                         {{ name: "EB-308 Studio", x: -30, z: -22, w: 12, h: 5.5, d: 8 }},
                         {{ name: "EB-314 Comp Center", x: -16, z: -13, w: 12, h: 5.5, d: 8 }},
-                        // Central Block
                         {{ name: "CB-301 Auditorium", x: 0, z: -18, w: 22, h: 7, d: 16 }},
-                        // West Wing (Right)
                         {{ name: "WB-301 Lecture", x: 30, z: 32, w: 12, h: 5.5, d: 8 }},
                         {{ name: "WB-302 Lecture", x: 30, z: 23, w: 12, h: 5.5, d: 8 }},
                         {{ name: "WB-303 Lecture", x: 30, z: 14, w: 12, h: 5.5, d: 8 }},
@@ -568,9 +547,6 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
                 floorGroups.push(flGroup);
             }});
 
-            // -------------------------------------------------------------
-            // 4 RED STAIRCASES CONNECTING ADJACENT FLOORS (FROM BLUEPRINTS)
-            // -------------------------------------------------------------
             const stairPositions = [
                 {{ name: "East Stairs (EB)", x: -30, z: 0, w: 12, d: 8 }},
                 {{ name: "Central Left Stairs", x: -9, z: 0, w: 9, d: 8 }},
@@ -581,7 +557,6 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
             const stairMeshes = [];
 
             stairPositions.forEach(pos => {{
-                // Continuous Red Vertical Column / Shaft through all floors
                 const totalH = 29;
                 const shaftGeo = new THREE.BoxGeometry(pos.w, totalH, pos.d);
                 const shaftMat = new THREE.MeshStandardMaterial({{
@@ -597,13 +572,11 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
                 scene.add(shaft);
                 stairMeshes.push(shaft);
 
-                // Wireframe edges on stairs
                 const edges = new THREE.EdgesGeometry(shaftGeo);
                 const wire = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({{ color: 0xffffff, linewidth: 2 }}));
                 wire.position.set(pos.x, totalH / 2, pos.z);
                 scene.add(wire);
 
-                // Stair treads simulation
                 for (let stepY = 1; stepY < totalH; stepY += 2) {{
                     const stepGeo = new THREE.BoxGeometry(pos.w - 1, 0.4, pos.d - 1);
                     const step = new THREE.Mesh(stepGeo, new THREE.MeshBasicMaterial({{ color: 0xffffff }}));
@@ -611,15 +584,11 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
                     scene.add(step);
                 }}
 
-                // Stair Top Label
                 const label = makeTextSprite("🔴 " + pos.name, "#ffffff", "rgba(220, 38, 38, 0.9)", true);
                 label.position.set(pos.x, totalH + 3, pos.z);
                 scene.add(label);
             }});
 
-            // -------------------------------------------------------------
-            // INTERACTIVE TOOLBAR FUNCTIONS
-            // -------------------------------------------------------------
             window.setExploded = function(isExploded) {{
                 floorGroups.forEach(fg => fg.visible = true);
                 if (isExploded) {{
@@ -649,21 +618,16 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
                 controls.target.set(0, 15, 0);
             }};
 
-            // -------------------------------------------------------------
-            // ANIMATION LOOP
-            // -------------------------------------------------------------
             const clock = new THREE.Clock();
             function animate() {{
                 requestAnimationFrame(animate);
                 const t = clock.getElapsedTime();
                 
-                // Floating pin animation
                 if (targetPinMesh) {{
                     targetPinMesh.position.y = 12 + Math.sin(t * 4) * 0.9;
                     targetPinMesh.rotation.y += 0.04;
                 }}
                 
-                // Subtle pulse on Red Staircases
                 stairMeshes.forEach(mesh => {{
                     mesh.material.emissiveIntensity = 0.5 + Math.sin(t * 3) * 0.25;
                 }});
@@ -783,7 +747,6 @@ elif st.session_state.current_page == 'Student':
                 usn, name, college, event, room, floor, bench = student
                 st.success(f"✅ Allotment Found for **{name}**")
                 
-                # Allotment Details Card
                 st.markdown(f"""
                 ### 📋 Your Allotment Details:
                 * **Student Name:** `{name}`
@@ -799,11 +762,9 @@ elif st.session_state.current_page == 'Student':
                 st.markdown("### 🌐 3D Interactive Campus Blueprint (Ground + 1st + 2nd Floor)")
                 st.caption("🖱️ **Drag to rotate 360° • Scroll to zoom • Use top buttons to separate floors.**")
                 
-                # Render 3D Model with Red Stairs and Highlighted Classroom
                 blueprint_3d_html = render_3d_college_blueprint(room, floor, bench)
                 components.html(blueprint_3d_html, height=570)
                 
-                # Dynamic Stairway Navigation Guidance
                 room_upper = str(room).upper()
                 if "EB" in room_upper:
                     nearest_stair = "🔴 **East Wing Staircase** (adjacent to EB-106 / EB-206 / EB-306)"
@@ -824,7 +785,6 @@ elif st.session_state.current_page == 'Student':
 # --- PAGE: ADMIN ---
 elif st.session_state.current_page == 'Admin':
     
-    # ADMIN AUTHENTICATION FLOW
     if st.session_state.admin_auth_step < 2:
         st.button("⬅️ Cancel & Return Home", on_click=navigate_to, args=('Home',))
         st.markdown("### 🔒 System Administrator Access")
@@ -902,7 +862,6 @@ elif st.session_state.current_page == 'Admin':
         
         st.markdown("#### Step 2: Set Room Capacity & Floors")
         
-        # Updated Default Rooms matching the actual College Blueprint
         default_rooms = pd.DataFrame([
             {"Room Number": "WB-209", "Floor": "1st Floor", "Capacity": 30},
             {"Room Number": "EB-201", "Floor": "1st Floor", "Capacity": 30},
@@ -954,7 +913,7 @@ elif st.session_state.current_page == 'Admin':
                 st.download_button(
                     label="📥 Download Master Allotment CSV",
                     data=csv_buffer, 
-                    file_name="SVCE_Master_Allotment.csv",
+                    file_name="SVCE_Master_Allotment.csv", 
                     mime="text/csv"
                 )
                 
