@@ -6,6 +6,7 @@ import random
 import string
 import time
 import smtplib
+import os
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from PIL import Image, ImageDraw
@@ -201,11 +202,18 @@ def get_all_allotments():
 init_db()
 
 # ==========================================
-# 4. GMAIL SMTP DISPATCH (WITH FALLBACK)
+# 4. GMAIL SMTP DISPATCH (SAFE CREDENTIAL LOADING)
 # ==========================================
-# Pull credentials directly from Streamlit secrets (or replace strings directly for local testing)
-SENDER_EMAIL = st.secrets.get("SENDER_EMAIL", "funguru528@gmail.com")        
-SENDER_APP_PASSWORD = st.secrets.get("SENDER_APP_PASSWORD", "your_16_char_app_password")    
+def get_credential(key_name, default_value=""):
+    try:
+        if key_name in st.secrets:
+            return st.secrets[key_name]
+    except Exception:
+        pass
+    return os.getenv(key_name, default_value)
+
+SENDER_EMAIL = get_credential("SENDER_EMAIL", "funguru528@gmail.com")
+SENDER_APP_PASSWORD = get_credential("SENDER_APP_PASSWORD", "your_16_char_app_password")
 
 def send_email_otp(target_email, otp):
     """Sends OTP using standard smtplib on Port 587 (TLS) with robust error reporting."""
