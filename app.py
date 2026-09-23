@@ -6,6 +6,7 @@ import random
 import string
 import time
 import smtplib
+import requests
 from email.mime.text import MIMEText
 from PIL import Image, ImageDraw
 import io
@@ -185,35 +186,70 @@ def fetch_student_allotment(usn):
 init_db()
 
 # ==========================================
-# 4. GMAIL OTP INTEGRATION
+# 4. ROBUST OTP DISPATCHER (HTTP API + MULTI-PORT FALLBACK)
 # ==========================================
 def send_email_otp(target_email, otp):
     """
-    Sends an email OTP using Gmail's SMTP server via Port 587 (STARTTLS).
+    Sends OTP via HTTP API (Resend / Brevo) if configured, or attempts SMTP
+    with port fallbacks (587 -> 465) to handle cloud network blocks.
     """
+    # 1. OPTION A: Free HTTPS REST API via Resend (Bypasses Render SMTP port blocking)
+    # Set RESEND_API_KEY in Render Environment Variables or st.secrets
+    resend_api_key = None
+    if hasattr(st, "secrets") and "RESEND_API_KEY" in st.secrets:
+        resend_api_key = st.secrets["RESEND_API_KEY"]
+
+    if resend_api_key:
+        try:
+            resp = requests.post(
+                "https://api.resend.com/emails",
+                headers={
+                    "Authorization": f"Bearer {resend_api_key}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "from": "SVCE Portal <onboarding@resend.dev>",
+                    "to": [target_email],
+                    "subject": "SVCE Portal - Admin Login Verification",
+                    "text": f"Security Alert: Your SVCE Admin login OTP is {otp}. Do not share this with anyone."
+                },
+                timeout=10
+            )
+            if resp.status_code in [200, 201]:
+                return True, "Email Sent Successfully via HTTP API"
+        except Exception:
+            pass # Fall through to direct SMTP attempts
+
+    # 2. OPTION B: SMTP Fallbacks
     SENDER_EMAIL = "funguru528@gmail.com"
     SENDER_APP_PASSWORD = "yigscoygwoqdbmsd"
 
-    try:
-        msg = MIMEText(
-            f"Security Alert: Your SVCE Admin login OTP is {otp}.\n\nDo not share this with anyone.",
-            "plain",
-            "utf-8"
-        )
-        msg['Subject'] = 'SVCE Portal - Admin Login Verification'
-        msg['From'] = SENDER_EMAIL
-        msg['To'] = target_email
+    msg = MIMEText(f"Security Alert: Your SVCE Admin login OTP is {otp}. Do not share this with anyone.")
+    msg['Subject'] = 'SVCE Portal - Admin Login Verification'
+    msg['From'] = SENDER_EMAIL
+    msg['To'] = target_email
 
-        with smtplib.SMTP('smtp.gmail.com', 587, timeout=15) as server:
+    # Attempt 1: Port 587 with STARTTLS
+    try:
+        with smtplib.SMTP('smtp.gmail.com', 587, timeout=10) as server:
             server.ehlo()
             server.starttls()
             server.ehlo()
             server.login(SENDER_EMAIL, SENDER_APP_PASSWORD)
             server.send_message(msg)
-            
-        return True, "Email Sent Successfully"
-    except Exception as e:
-        return False, str(e)
+            return True, "Email Sent Successfully (Port 587)"
+    except Exception as e587:
+        # Attempt 2: Port 465 with SSL
+        try:
+            with smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=10) as server:
+                server.login(SENDER_EMAIL, SENDER_APP_PASSWORD)
+                server.send_message(msg)
+                return True, "Email Sent Successfully (Port 465)"
+        except Exception as e465:
+            # If both fail due to Render's firewall, explain clearly:
+            if "101" in str(e587) or "101" in str(e465) or "unreachable" in str(e587).lower():
+                return False, "Render blocked raw SMTP outbound ports (Errno 101). Use HTTP API (e.g. Resend) or use the simulation OTP shown below."
+            return False, f"SMTP Error: {str(e587)}"
 
 # ==========================================
 # 5. MULTI-TIER 3D BLUEPRINT ENGINE (THREE.JS)
@@ -823,9 +859,9 @@ elif st.session_state.current_page == 'Admin':
             st.success("✅ Password Verified.")
             
             if st.session_state.email_status == "sent":
-                st.info(f"📧 **Email OTP Sent from funguru528@gmail.com!** Check your inbox ({st.session_state.admin_email}) for the 6-digit code.")
+                st.info(f"📧 **Email OTP Sent!** Check your inbox ({st.session_state.admin_email}) for the 6-digit code.")
             else:
-                st.warning(f"⚠️ **Email Dispatch Status:** {st.session_state.email_status}. Operating in Fallback/Simulation Mode.")
+                st.warning(f"⚠️ **Email Dispatch Status:** {st.session_state.email_status}")
                 st.info(f"📧 **Simulation/Fallback Mode OTP:** ` {st.session_state.generated_otp} `")
             
             otp_input = st.text_input("Step 2: Enter 6-Digit OTP Code", max_chars=6).strip()
