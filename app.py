@@ -1,16 +1,17 @@
-import streamlit as st
-import streamlit.components.v1 as components
-import pandas as pd
-import sqlite3
+import io
+import os
 import random
+import sqlite3
 import string
 import time
-import smtplib
-import os
-from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+import smtplib
+
+import pandas as pd
 from PIL import Image, ImageDraw
-import io
+import streamlit as st
+import streamlit.components.v1 as components
 
 # ==========================================
 # 1. SESSION STATE INITIALIZATION
@@ -18,7 +19,7 @@ import io
 if 'current_page' not in st.session_state:
     st.session_state.current_page = 'Home'
 if 'admin_auth_step' not in st.session_state:
-    st.session_state.admin_auth_step = 0 # 0: Credentials, 1: OTP, 2: Access Granted
+    st.session_state.admin_auth_step = 0  # 0: Credentials, 1: OTP, 2: Access Granted
 if 'generated_otp' not in st.session_state:
     st.session_state.generated_otp = None
 if 'admin_email' not in st.session_state:
@@ -423,6 +424,7 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
             let targetPinMesh = null;
             let targetCoords = null;
             const floorGroups = [];
+            const baseFloorHeights = [0, 11, 22];
 
             function createRoom(name, x, y, z, w, h, d, floorIdx) {{
                 const group = new THREE.Group();
@@ -582,8 +584,6 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
                 }}
             ];
 
-            const baseFloorHeights = [0, 11, 22];
-
             floorConfigs.forEach((cfg, idx) => {{
                 const flGroup = new THREE.Group();
                 flGroup.add(createFloorSlab(cfg.name));
@@ -739,239 +739,225 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
                     animatedMarker.position.copy(pos);
                 }}
                 
-                stairMeshes.forEach(mesh => {{
-                    mesh.material.emissiveIntensity = 0.5 + Math.sin(t * 3) * 0.25;
-                }});
-
                 controls.update();
                 renderer.render(scene, camera);
             }}
+
             animate();
 
             window.addEventListener('resize', () => {{
-                const newW = container.clientWidth;
-                camera.aspect = newW / height;
+                const w = container.clientWidth || 900;
+                camera.aspect = w / height;
                 camera.updateProjectionMatrix();
-                renderer.setSize(newW, height);
+                renderer.setSize(w, height);
             }});
         </script>
     </body>
     </html>
     """
-    return html_code
+    components.html(html_code, height=600)
 
 # ==========================================
-# 6. CAPTCHA & NAVIGATION
+# 6. APP NAVIGATION & PAGES
 # ==========================================
-def generate_captcha_image(text):
-    img = Image.new('RGB', (160, 50), color=(240, 244, 248))
-    draw = ImageDraw.Draw(img)
-    for _ in range(6):
-        draw.line([(random.randint(0, 160), random.randint(0, 50)), 
-                   (random.randint(0, 160), random.randint(0, 50))], fill=(160, 170, 180), width=2)
-    draw.text((25, 12), text, fill=(10, 20, 40))
-    buf = io.BytesIO()
-    img.save(buf, format='PNG')
-    return buf.getvalue()
+def render_header():
+    col1, col2 = st.columns([1, 5])
+    with col1:
+        st.write("🎓")
+    with col2:
+        st.title("SVCE Bengaluru")
+        st.subheader("Sri Venkateshwara College of Engineering - Exam Portal")
+    st.divider()
 
-if "student_captcha" not in st.session_state:
-    st.session_state.student_captcha = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
-
-def refresh_student_captcha():
-    st.session_state.student_captcha = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
-
-def navigate_to(page):
-    st.session_state.current_page = page
-    if page == 'Home':
-        st.session_state.admin_auth_step = 0
-        st.session_state.generated_otp = None
-        st.session_state.admin_email = None
-        st.session_state.email_error_msg = None
-    st.rerun()
-
-# ==========================================
-# 7. PAGE ROUTING
-# ==========================================
-
-# --- PAGE: HOME ---
-if st.session_state.current_page == 'Home':
-    st.title("🎓 Sri Venkateshwara College of Engineering")
-    st.subheader("Welcome to the Seat Allotment Portal")
-    
+def render_marquee():
     marquee_html = """
     <div class="campus-marquee">
         <div class="campus-marquee-track">
-            <img src="https://svcengg.edu.in/assets/bgimages/IMG_9641.webp" alt="SVCE Campus 1"/>
-            <img src="https://svcengg.edu.in/assets/bgimages/IMG_9641.webp" alt="SVCE Campus 2"/>
-            <img src="https://svcengg.edu.in/assets/bgimages/IMG_9641.webp" alt="SVCE Campus 3"/>
-            <img src="https://svcengg.edu.in/assets/bgimages/IMG_9641.webp" alt="SVCE Campus 4"/>
-            <img src="https://svcengg.edu.in/assets/bgimages/IMG_9641.webp" alt="SVCE Campus 5"/>
-            <img src="https://svcengg.edu.in/assets/bgimages/IMG_9641.webp" alt="SVCE Campus 6"/>
-            <img src="https://svcengg.edu.in/assets/bgimages/IMG_9641.webp" alt="SVCE Campus 7"/>
-            <img src="https://svcengg.edu.in/assets/bgimages/IMG_9641.webp" alt="SVCE Campus 8"/>
+            <img src="https://svcengg.edu.in/assets/bgimages/IMG_9641.webp" alt="Campus View 1">
+            <img src="https://svcengg.edu.in/assets/bgimages/IMG_9643.webp" alt="Campus View 2">
+            <img src="https://svcengg.edu.in/assets/bgimages/IMG_9645.webp" alt="Campus View 3">
+            <img src="https://svcengg.edu.in/assets/bgimages/IMG_9641.webp" alt="Campus View 1">
+            <img src="https://svcengg.edu.in/assets/bgimages/IMG_9643.webp" alt="Campus View 2">
+            <img src="https://svcengg.edu.in/assets/bgimages/IMG_9645.webp" alt="Campus View 3">
         </div>
     </div>
     """
     st.markdown(marquee_html, unsafe_allow_html=True)
-    st.markdown("Please select your role to continue:")
+
+# Navigation Bar
+nav_col1, nav_col2, nav_col3 = st.columns(3)
+with nav_col1:
+    if st.button("🏠 Home", use_container_width=True):
+        st.session_state.current_page = 'Home'
+        st.rerun()
+with nav_col2:
+    if st.button("👨‍🎓 Student Portal", use_container_width=True):
+        st.session_state.current_page = 'Student'
+        st.rerun()
+with nav_col3:
+    if st.button("🔒 Admin Portal", use_container_width=True):
+        st.session_state.current_page = 'Admin'
+        st.rerun()
+
+st.write("---")
+
+# ------------------------------------------
+# PAGE 1: HOME
+# ------------------------------------------
+if st.session_state.current_page == 'Home':
+    render_header()
+    render_marquee()
+    st.markdown("""
+    ### Welcome to the SVCE Examination & Seating Management Portal
     
-    st.write("") 
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("👨‍🎓 Student Portal", use_container_width=True):
-            navigate_to('Student')
-    with col2:
-        if st.button("🔐 Admin Portal", use_container_width=True):
-            navigate_to('Admin')
+    This portal allows students to view their real-time seat allotments and navigate campus exam halls using our **3D Wayfinding Blueprint Engine**.
+    
+    * **Students:** Click on **Student Portal** above to enter your USN and locate your exam room and bench.
+    * **Administrators:** Access the **Admin Portal** to upload master student lists, generate randomized seating allocations, and update credentials.
+    """)
 
-# --- PAGE: STUDENT ---
+# ------------------------------------------
+# PAGE 2: STUDENT PORTAL
+# ------------------------------------------
 elif st.session_state.current_page == 'Student':
-    st.button("⬅️ Back to Home", on_click=navigate_to, args=('Home',))
-    st.title("👨‍🎓 Student Seat Lookup")
-    st.write("Enter your USN and verify the Captcha to view your seat allotment details and 3D floor model.")
-
-    with st.form("student_search_form"):
-        usn_input = st.text_input("Enter your USN (e.g., 1VE21CS001):").strip()
-        
-        c_col1, c_col2 = st.columns([1, 2])
-        with c_col1:
-            captcha_img = generate_captcha_image(st.session_state.student_captcha)
-            st.image(captcha_img, caption="Security Code")
-        with c_col2:
-            captcha_input = st.text_input("Type the code shown above:")
-
-        submit_search = st.form_submit_button("🔍 Search Allotment")
-
-    if submit_search:
+    render_header()
+    st.subheader("🔎 Student Seating Allotment Finder")
+    
+    usn_input = st.text_input("Enter your USN (e.g., 1VE21CS001):", placeholder="1VE...").strip().upper()
+    
+    if st.button("Search Allotment", type="primary"):
         if not usn_input:
-            st.error("Please enter a valid USN.")
-        elif captcha_input.strip().upper() != st.session_state.student_captcha.upper():
-            st.error("Incorrect Captcha code. Please try again.")
-            refresh_student_captcha()
+            st.warning("Please enter a valid USN.")
         else:
-            refresh_student_captcha()
-            result = fetch_student_allotment(usn_input)
-            if result:
-                usn, name, college, event, room, floor, bench = result
-                st.success(f"Allotment Found for **{name}** ({usn})")
+            data = fetch_student_allotment(usn_input)
+            if data:
+                usn, name, college, event, room, floor, bench = data
+                st.success(f"Allotment Found for {name} ({usn})")
                 
-                m1, m2, m3 = st.columns(3)
-                m1.metric("Exam / Event", event)
-                m2.metric("Room / Hall", room)
-                m3.metric("Floor / Bench", f"{floor} (Bench #{bench})")
-
-                st.subheader("📍 Interactive 3D Campus Blueprint & Live Navigation")
-                st.write("Rotate, zoom, or explode the 3D view below. Follow the glowing path to navigate directly to your allocated seat.")
+                col1, col2, col3 = st.columns(3)
+                col1.metric("Exam/Event", event)
+                col2.metric("Room Number", room)
+                col3.metric("Bench Number", f"Bench #{bench} ({floor})")
                 
-                html_blueprint = render_3d_college_blueprint(room, floor, bench)
-                components.html(html_blueprint, height=600)
+                st.markdown("### 🗺️ 3D Campus Navigation & Seat Blueprint")
+                render_3d_college_blueprint(room, floor, bench)
             else:
-                st.warning(f"No allotment record found for USN: **{usn_input.upper()}**")
+                st.error("No allotment found for the entered USN. Please verify with the exam controller.")
 
-# --- PAGE: ADMIN ---
+# ------------------------------------------
+# PAGE 3: ADMIN PORTAL
+# ------------------------------------------
 elif st.session_state.current_page == 'Admin':
-    st.button("⬅️ Back to Home", on_click=navigate_to, args=('Home',))
-    st.title("🔐 Admin Management Portal")
-
-    # Step 0: Authentication Form
+    st.title("🔒 Admin Management Portal")
+    
+    # Step 0: Authentication
     if st.session_state.admin_auth_step == 0:
         st.subheader("Admin Login")
-        with st.form("admin_login_form"):
-            email_input = st.text_input("Admin Email Address:")
-            pwd_input = st.text_input("Admin Password:", type="password")
-            btn_login = st.form_submit_button("Send Verification OTP")
-
-        if btn_login:
-            current_pwd = get_admin_password()
-            if pwd_input != current_pwd:
-                st.error("Invalid password.")
-            elif "@" not in email_input or "." not in email_input:
-                st.error("Please enter a valid email address.")
-            else:
-                generated_otp = str(random.randint(100000, 999999))
-                st.session_state.generated_otp = generated_otp
-                st.session_state.admin_email = email_input
+        admin_email = st.text_input("Admin Email Address", placeholder="admin@svce.edu.in")
+        admin_pass = st.text_input("Admin Password", type="password")
+        
+        if st.button("Request Verification OTP"):
+            if admin_pass == get_admin_password() and admin_email:
+                otp = ''.join(random.choices(string.digits, k=6))
+                st.session_state.generated_otp = otp
+                st.session_state.admin_email = admin_email
                 
-                with st.spinner("Dispatching OTP email..."):
-                    success, msg = send_email_otp(email_input, generated_otp)
-                    if not success:
-                        st.session_state.email_error_msg = msg
-                    else:
-                        st.session_state.email_error_msg = None
+                success, msg = send_email_otp(admin_email, otp)
+                if success:
+                    st.success(msg)
+                else:
+                    st.warning(f"{msg}\n\n👉 **Fallback OTP (for testing):** `{otp}`")
                 
                 st.session_state.admin_auth_step = 1
                 st.rerun()
-
+            else:
+                st.error("Invalid password or missing email.")
+                
     # Step 1: OTP Verification
     elif st.session_state.admin_auth_step == 1:
-        st.subheader("🔑 Enter Email OTP")
-        st.info(f"Target Email: **{st.session_state.admin_email}**")
-
-        if st.session_state.email_error_msg:
-            st.warning(f"⚠️ Email Status Notice: {st.session_state.email_error_msg}")
-            st.success(f"🔑 **Fallback Admin Verification OTP:** `{st.session_state.generated_otp}`")
-
-        with st.form("otp_form"):
-            otp_input = st.text_input("6-Digit Security OTP:")
-            btn_verify = st.form_submit_button("Verify & Login")
-
-        if btn_verify:
-            if otp_input.strip() == st.session_state.generated_otp:
-                st.session_state.admin_auth_step = 2
-                st.success("Authentication Successful!")
-                time.sleep(1)
+        st.subheader(f"Enter OTP sent to {st.session_state.admin_email}")
+        user_otp = st.text_input("6-Digit OTP", max_chars=6)
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("Verify OTP", type="primary"):
+                if user_otp == st.session_state.generated_otp:
+                    st.session_state.admin_auth_step = 2
+                    st.success("Access Granted!")
+                    st.rerun()
+                else:
+                    st.error("Invalid OTP code.")
+        with col2:
+            if st.button("Back to Login"):
+                st.session_state.admin_auth_step = 0
                 st.rerun()
-            else:
-                st.error("Invalid OTP code. Please try again.")
 
     # Step 2: Admin Dashboard
     elif st.session_state.admin_auth_step == 2:
-        st.success(f"Logged in as Administrator ({st.session_state.admin_email})")
+        st.success("Authenticated as Administrator")
         
-        tab1, tab2, tab3 = st.tabs(["📤 Upload Allotments", "📋 View Records", "⚙️ Settings"])
-
+        tab1, tab2, tab3 = st.tabs(["📋 Upload & Allocate Seating", "📊 Current Allotments", "🔑 Security Settings"])
+        
         with tab1:
-            st.subheader("Upload Allotment Dataset")
-            st.write("Upload an Excel (`.xlsx`) or CSV (`.csv`) file containing allotment details.")
-            st.caption("Required Columns: `USN`, `Student Name`, `College Name`, `Event/Exam Name`, `Room Number`, `Floor`, `Bench Number`")
-
-            uploaded_file = st.file_uploader("Choose a file", type=['csv', 'xlsx'])
-            if uploaded_file is not None:
-                try:
-                    if uploaded_file.name.endswith('.csv'):
-                        df = pd.read_csv(uploaded_file)
-                    else:
-                        df = pd.read_excel(uploaded_file)
-
-                    required_cols = {'USN', 'Student Name', 'College Name', 'Event/Exam Name', 'Room Number', 'Floor', 'Bench Number'}
-                    if not required_cols.issubset(df.columns):
-                        st.error(f"Missing required columns! Ensure file contains: {', '.join(required_cols)}")
-                    else:
-                        st.dataframe(df.head(), use_container_width=True)
-                        if st.button("💾 Save Allotments to Database"):
-                            save_allotments(df)
-                            st.success("Allotment database updated successfully!")
-                except Exception as e:
-                    st.error(f"❌ Error during processing: {str(e)}")
+            st.subheader("Generate Seating Allocations")
+            uploaded_file = st.file_uploader("Upload Student List CSV/Excel", type=["csv", "xlsx"])
+            
+            if uploaded_file:
+                if uploaded_file.name.endswith('.csv'):
+                    df = pd.read_csv(uploaded_file)
+                else:
+                    df = pd.read_excel(uploaded_file)
+                
+                st.write("Preview Uploaded Data:", df.head())
+                
+                required_cols = ['USN', 'Student Name', 'College Name', 'Event/Exam Name']
+                if all(col in df.columns for col in required_cols):
+                    if st.button("Randomize & Save Allotments"):
+                        rooms = ['EB-101', 'EB-102', 'EB-201', 'EB-202', 'WB-101', 'WB-201', 'CB-301']
+                        floors = ['Ground Floor', 'Ground Floor', 'First Floor', 'First Floor', 'Ground Floor', 'First Floor', 'Second Floor']
+                        
+                        allocated_rows = []
+                        for idx, row in df.iterrows():
+                            r_idx = random.randint(0, len(rooms) - 1)
+                            allocated_rows.append({
+                                'USN': row['USN'],
+                                'Student Name': row['Student Name'],
+                                'College Name': row['College Name'],
+                                'Event/Exam Name': row['Event/Exam Name'],
+                                'Room Number': rooms[r_idx],
+                                'Floor': floors[r_idx],
+                                'Bench Number': random.randint(1, 30)
+                            })
+                        
+                        df_allocated = pd.DataFrame(allocated_rows)
+                        save_allotments(df_allocated)
+                        st.success("Seating allocation generated and saved to database successfully!")
+                else:
+                    st.error(f"Missing required columns. File must contain: {', '.join(required_cols)}")
 
         with tab2:
-            st.subheader("Current Database Records")
-            df_records = get_all_allotments()
-            if not df_records.empty:
-                st.dataframe(df_records, use_container_width=True)
+            st.subheader("Database Master Allotment List")
+            df_all = get_all_allotments()
+            if not df_all.empty:
+                st.dataframe(df_all, use_container_width=True)
+                csv = df_all.to_csv(index=False).encode('utf-8')
+                st.download_button("Download Allotment CSV", data=csv, file_name="SVCE_Exam_Allotments.csv", mime="text/csv")
             else:
-                st.info("No allotment records found in database.")
+                st.info("No allotments currently found in database.")
 
         with tab3:
-            st.subheader("Change Password")
-            with st.form("change_pwd_form"):
-                new_p1 = st.text_input("New Password:", type="password")
-                new_p2 = st.text_input("Confirm New Password:", type="password")
-                btn_change_pwd = st.form_submit_button("Update Password")
-
-            if btn_change_pwd:
-                if not new_p1 or new_p1 != new_p2:
-                    st.error("Passwords do not match or are empty.")
-                else:
-                    update_admin_password(new_p1)
+            st.subheader("Change Admin Password")
+            new_password = st.text_input("New Password", type="password")
+            confirm_password = st.text_input("Confirm New Password", type="password")
+            
+            if st.button("Update Password"):
+                if new_password and new_password == confirm_password:
+                    update_admin_password(new_password)
                     st.success("Admin password updated successfully!")
+                else:
+                    st.error("Passwords do not match or are empty.")
+                    
+        st.divider()
+        if st.button("Log Out"):
+            st.session_state.admin_auth_step = 0
+            st.rerun()
