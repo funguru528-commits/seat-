@@ -5,7 +5,6 @@ import sqlite3
 import random
 import string
 import time
-import threading
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -23,6 +22,8 @@ if 'generated_otp' not in st.session_state:
     st.session_state.generated_otp = None
 if 'admin_email' not in st.session_state:
     st.session_state.admin_email = None
+if 'email_error_msg' not in st.session_state:
+    st.session_state.email_error_msg = None
 
 # ==========================================
 # 2. PAGE CONFIGURATION & DYNAMIC STYLING
@@ -200,37 +201,36 @@ def get_all_allotments():
 init_db()
 
 # ==========================================
-# 4. GMAIL SMTP DISPATCH (BUILT-IN)
+# 4. GMAIL SMTP DISPATCH (WITH FALLBACK)
 # ==========================================
-SENDER_EMAIL = "your_email@gmail.com"        # Replace with your Gmail
-SENDER_APP_PASSWORD = "your_app_password"    # Replace with 16-character App Password
+# Update these with your valid Gmail address and 16-character App Password if available
+SENDER_EMAIL = "your_email@gmail.com"        
+SENDER_APP_PASSWORD = "your_app_password"    
 
 def send_email_otp(target_email, otp):
-    """Sends OTP using standard smtplib on Port 587 (TLS)."""
+    """Sends OTP using standard smtplib on Port 587 (TLS) with robust error reporting."""
+    if "your_email@gmail.com" in SENDER_EMAIL or "your_app_password" in SENDER_APP_PASSWORD:
+        return False, "SMTP Credentials Not Configured (Using On-Screen Display Fallback)"
+
     try:
         msg = MIMEMultipart()
         msg['From'] = SENDER_EMAIL
         msg['To'] = target_email
-        msg['Subject'] = "SVCE Portal - Admin Login Verification"
+        msg['Subject'] = "SVCE Portal - Admin Login Verification Code"
         
-        body = f"Security Alert: Your SVCE Admin login OTP is {otp}. Do not share this with anyone."
+        body = f"Security Alert: Your SVCE Admin verification OTP is {otp}. Do not share this with anyone."
         msg.attach(MIMEText(body, 'plain'))
         
-        with smtplib.SMTP('smtp.gmail.com', 587) as server:
+        with smtplib.SMTP('smtp.gmail.com', 587, timeout=10) as server:
             server.starttls()
             server.login(SENDER_EMAIL, SENDER_APP_PASSWORD)
             server.send_message(msg)
-        return True, "Email Sent Successfully"
+        return True, "OTP email dispatched successfully!"
     except Exception as e:
-        return False, str(e)
-
-def send_email_otp_async(target_email, otp):
-    thread = threading.Thread(target=send_email_otp, args=(target_email, otp))
-    thread.daemon = True
-    thread.start()
+        return False, f"Email delivery failed: {str(e)}"
 
 # ==========================================
-# 5. MULTI-TIER 3D BLUEPRINT ENGINE (THREE.JS)
+# 5. MULTI-TIER 3D BLUEPRINT & NAVIGATION ENGINE
 # ==========================================
 def render_3d_college_blueprint(target_room, target_floor, bench_no):
     room_clean = str(target_room).upper().strip().replace(" ", "")
@@ -242,7 +242,7 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
         <meta charset="utf-8">
         <style>
             body {{ margin: 0; padding: 0; overflow: hidden; background: #070d1f; font-family: 'Times New Roman', serif; }}
-            #canvas-container {{ width: 100%; height: 550px; position: relative; }}
+            #canvas-container {{ width: 100%; height: 580px; position: relative; }}
             .overlay-ui {{
                 position: absolute;
                 top: 12px;
@@ -274,6 +274,20 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
                 border-radius: 4px;
                 font-weight: bold;
             }}
+            .nav-box {{
+                position: absolute;
+                bottom: 40px;
+                left: 12px;
+                background: rgba(15, 23, 42, 0.95);
+                border: 1px solid #facc15;
+                border-radius: 8px;
+                padding: 8px 14px;
+                color: #ffffff;
+                font-size: 12px;
+                z-index: 10;
+                max-width: 380px;
+            }}
+            .nav-box h5 {{ margin: 0 0 4px 0; color: #facc15; font-size: 13px; }}
             .view-toolbar {{
                 position: absolute;
                 top: 12px;
@@ -298,14 +312,14 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
             }}
             .controls-hint {{
                 position: absolute;
-                bottom: 12px;
+                bottom: 8px;
                 left: 12px;
                 right: 12px;
                 display: flex;
                 justify-content: space-between;
-                background: rgba(0,0,0,0.65);
+                background: rgba(0,0,0,0.75);
                 border-radius: 6px;
-                padding: 6px 12px;
+                padding: 4px 12px;
                 color: #94a3b8;
                 font-size: 11px;
                 z-index: 10;
@@ -321,6 +335,11 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
                 <p>Target Class: <span class="badge-assigned">{target_room} ({target_floor}, Bench #{bench_no})</span></p>
                 <p style="margin-top:4px;">Stairs: <span class="badge-stair">4 Red Vertical Connectors</span> linking Ground ⇄ 1st ⇄ 2nd</p>
             </div>
+
+            <div class="nav-box" id="nav-instructions">
+                <h5>🗺️ Active Navigation Path</h5>
+                <p id="nav-text">Calculating route from Main Entrance to room...</p>
+            </div>
             
             <div class="view-toolbar">
                 <button class="view-btn" onclick="setExploded(false)">🏢 Stacked View</button>
@@ -328,19 +347,19 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
                 <button class="view-btn" onclick="isolateFloor(0)">Gnd Floor</button>
                 <button class="view-btn" onclick="isolateFloor(1)">1st Floor</button>
                 <button class="view-btn" onclick="isolateFloor(2)">2nd Floor</button>
-                <button class="view-btn" onclick="resetView()">🔄 Reset 360°</button>
+                <button class="view-btn" onclick="resetView()">🔄 Reset View</button>
             </div>
 
             <div class="controls-hint">
                 <span>🖱️ <b>Left Click + Drag:</b> Rotate 360° | <b>Scroll:</b> Zoom | <b>Right Click:</b> Pan</span>
-                <span>🔴 <b>Red Towers:</b> Staircases Linking Adjacent Floors</span>
+                <span>🟡 <b>Glowing Line:</b> Live Wayfinding Route to your Class</span>
             </div>
         </div>
 
         <script>
             const container = document.getElementById('canvas-container');
             const width = container.clientWidth || 900;
-            const height = 550;
+            const height = 580;
 
             const scene = new THREE.Scene();
             scene.background = new THREE.Color(0x070d1f);
@@ -394,6 +413,7 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
 
             const assignedTarget = "{room_clean}";
             let targetPinMesh = null;
+            let targetCoords = null;
             const floorGroups = [];
 
             function createRoom(name, x, y, z, w, h, d, floorIdx) {{
@@ -446,6 +466,13 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
                     pin.position.set(0, h + 9, 0);
                     group.add(pin);
                     targetPinMesh = pin;
+                    
+                    targetCoords = {{
+                        x: x,
+                        y: baseFloorHeights[floorIdx] + h / 2,
+                        z: z,
+                        floorIdx: floorIdx
+                    }};
                 }}
 
                 group.position.set(x, y, z);
@@ -602,6 +629,63 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
                 scene.add(label);
             }});
 
+            let animatedMarker = null;
+            let pathCurve = null;
+
+            if (targetCoords) {{
+                let chosenStair = stairPositions[1];
+                if (targetCoords.x <= -20) chosenStair = stairPositions[0];
+                else if (targetCoords.x >= 20) chosenStair = stairPositions[3];
+
+                const entrancePoint = new THREE.Vector3(0, 1, 35);
+                const stairGnd = new THREE.Vector3(chosenStair.x, 1, chosenStair.z);
+                const stairTargetFl = new THREE.Vector3(chosenStair.x, targetCoords.y, chosenStair.z);
+                const destination = new THREE.Vector3(targetCoords.x, targetCoords.y, targetCoords.z);
+
+                const pathPoints = [entrancePoint];
+
+                if (targetCoords.floorIdx > 0) {{
+                    pathPoints.push(stairGnd);
+                    pathPoints.push(stairTargetFl);
+                }} else {{
+                    pathPoints.push(new THREE.Vector3(chosenStair.x, 1, chosenStair.z));
+                }}
+                pathPoints.push(destination);
+
+                const lineGeometry = new THREE.BufferGeometry().setFromPoints(pathPoints);
+                const lineMaterial = new THREE.LineDashedMaterial({{
+                    color: 0x38bdf8,
+                    linewidth: 4,
+                    scale: 1,
+                    dashSize: 2,
+                    gapSize: 1,
+                }});
+                const pathLine = new THREE.Line(lineGeometry, lineMaterial);
+                pathLine.computeLineDistances();
+                scene.add(pathLine);
+
+                const markerGeo = new THREE.SphereGeometry(1.2, 16, 16);
+                const markerMat = new THREE.MeshStandardMaterial({{
+                    color: 0xfacc15,
+                    emissive: 0xeab308,
+                    emissiveIntensity: 1.0
+                }});
+                animatedMarker = new THREE.Mesh(markerGeo, markerMat);
+                scene.add(animatedMarker);
+
+                pathCurve = new THREE.CatmullRomCurve3(pathPoints);
+
+                const navText = document.getElementById('nav-text');
+                if (targetCoords.floorIdx === 0) {{
+                    navText.innerHTML = `Enter Main Gate ➔ Walk along Ground Floor Corridor ➔ Proceed directly to <b>${{assignedTarget}}</b>.`;
+                }} else {{
+                    const flName = targetCoords.floorIdx === 1 ? "1st Floor" : "2nd Floor";
+                    navText.innerHTML = `Enter Main Gate ➔ Head to <b>${{chosenStair.name}}</b> ➔ Take Stairs up to <b>${{flName}}</b> ➔ Walk down corridor to <b>${{assignedTarget}}</b>.`;
+                }}
+            }} else {{
+                document.getElementById('nav-text').innerText = "Target room not found in layout map.";
+            }}
+
             window.setExploded = function(isExploded) {{
                 floorGroups.forEach(fg => fg.visible = true);
                 if (isExploded) {{
@@ -639,6 +723,12 @@ def render_3d_college_blueprint(target_room, target_floor, bench_no):
                 if (targetPinMesh) {{
                     targetPinMesh.position.y = 12 + Math.sin(t * 4) * 0.9;
                     targetPinMesh.rotation.y += 0.04;
+                }}
+
+                if (animatedMarker && pathCurve) {{
+                    const progress = (t * 0.25) % 1;
+                    const pos = pathCurve.getPointAt(progress);
+                    animatedMarker.position.copy(pos);
                 }}
                 
                 stairMeshes.forEach(mesh => {{
@@ -688,6 +778,7 @@ def navigate_to(page):
         st.session_state.admin_auth_step = 0
         st.session_state.generated_otp = None
         st.session_state.admin_email = None
+        st.session_state.email_error_msg = None
     st.rerun()
 
 # ==========================================
@@ -761,11 +852,11 @@ elif st.session_state.current_page == 'Student':
                 m2.metric("Room / Hall", room)
                 m3.metric("Floor / Bench", f"{floor} (Bench #{bench})")
 
-                st.subheader("📍 Interactive 3D Campus Blueprint")
-                st.write("Rotate, zoom, or explode the 3D view below to navigate to your examination hall.")
+                st.subheader("📍 Interactive 3D Campus Blueprint & Live Navigation")
+                st.write("Rotate, zoom, or explode the 3D view below. Follow the glowing path to navigate directly to your allocated seat.")
                 
                 html_blueprint = render_3d_college_blueprint(room, floor, bench)
-                components.html(html_blueprint, height=580)
+                components.html(html_blueprint, height=600)
             else:
                 st.warning(f"No allotment record found for USN: **{usn_input.upper()}**")
 
@@ -793,7 +884,12 @@ elif st.session_state.current_page == 'Admin':
                 st.session_state.generated_otp = generated_otp
                 st.session_state.admin_email = email_input
                 
-                send_email_otp_async(email_input, generated_otp)
+                with st.spinner("Dispatching OTP email..."):
+                    success, msg = send_email_otp(email_input, generated_otp)
+                    if not success:
+                        st.session_state.email_error_msg = msg
+                    else:
+                        st.session_state.email_error_msg = None
                 
                 st.session_state.admin_auth_step = 1
                 st.rerun()
@@ -801,7 +897,11 @@ elif st.session_state.current_page == 'Admin':
     # Step 1: OTP Verification
     elif st.session_state.admin_auth_step == 1:
         st.subheader("🔑 Enter Email OTP")
-        st.info(f"An OTP has been dispatched to: **{st.session_state.admin_email}**")
+        st.info(f"Target Email: **{st.session_state.admin_email}**")
+
+        if st.session_state.email_error_msg:
+            st.warning(f"⚠️ Email Status Notice: {st.session_state.email_error_msg}")
+            st.success(f"🔑 **Fallback Admin Verification OTP:** `{st.session_state.generated_otp}`")
 
         with st.form("otp_form"):
             otp_input = st.text_input("6-Digit Security OTP:")
@@ -814,7 +914,7 @@ elif st.session_state.current_page == 'Admin':
                 time.sleep(1)
                 st.rerun()
             else:
-                st.error("Invalid OTP code. Please check your inbox and try again.")
+                st.error("Invalid OTP code. Please try again.")
 
     # Step 2: Admin Dashboard
     elif st.session_state.admin_auth_step == 2:
